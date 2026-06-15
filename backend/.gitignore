@@ -1,0 +1,20 @@
+# Environment
+.env
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Alembic
+# (keep versions, ignore nothing specific here for now)
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
