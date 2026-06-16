@@ -6,7 +6,8 @@ from alembic import context
 # Import settings and Base/models so Alembic knows about our tables
 from app.core.config import settings
 from app.core.database import Base
-from app.models.user import User  # noqa: F401  (import all models here)
+from app.models.user import User       # noqa: F401
+from app.models.document import Document  # noqa: F401
 
 config = context.config
 

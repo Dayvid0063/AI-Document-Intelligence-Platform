@@ -12,7 +12,9 @@ frontend/.env
 frontend/.env.local
 frontend/.env*.local
 
-# OS
+# Uploaded files (local dev only — use cloud storage in production)
+backend/uploads/*
+!backend/uploads/.gitkeep
 .DS_Store
 
 # IDE
