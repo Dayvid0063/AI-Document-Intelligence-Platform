@@ -110,6 +110,22 @@ def get_document_by_id(doc_id: str, current_user: User, db: Session) -> Document
     return document
 
 
+def update_document_text(doc_id: str, extracted_text: str, db: Session) -> Document:
+    """
+    Save extracted OCR text to a document and mark it as completed.
+    Called by the process endpoint after OCR runs successfully.
+    """
+    document = db.query(Document).filter(Document.id == doc_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    document.extracted_text = extracted_text
+    document.status = "completed" if extracted_text else "failed"
+    db.commit()
+    db.refresh(document)
+    return document
+
+
 def delete_document(doc_id: str, current_user: User, db: Session) -> None:
     """Delete a document record and its file from disk."""
     document = get_document_by_id(doc_id, current_user, db)

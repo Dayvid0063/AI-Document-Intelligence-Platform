@@ -10,7 +10,9 @@ from app.services.document_service import (
     get_user_documents,
     get_document_by_id,
     delete_document,
+    update_document_text,
 )
+from app.services.ocr_service import extract_text
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -47,6 +49,20 @@ def get_document(
 ):
     """Return a single document by ID."""
     return get_document_by_id(doc_id, current_user, db)
+
+
+@router.post("/{doc_id}/process", response_model=DocumentResponse)
+def process_document(
+    doc_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Trigger OCR text extraction on an uploaded document.
+    """
+    document = get_document_by_id(doc_id, current_user, db)
+    extracted_text = extract_text(document.file_path, document.mime_type)
+    return update_document_text(doc_id, extracted_text, db)
 
 
 @router.delete("/{doc_id}", status_code=204)
