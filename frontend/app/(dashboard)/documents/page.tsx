@@ -4,11 +4,10 @@ import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import DocumentUpload from "@/components/documents/DocumentUpload";
 import DocumentList from "@/components/documents/DocumentList";
-import StatCards from "@/components/dashboard/StatCards";
 import { documentService } from "@/lib/documents";
 import { Document } from "@/types/document";
 
-export default function DashboardPage() {
+export default function DocumentsPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -32,27 +31,19 @@ export default function DashboardPage() {
   };
 
   return (
-    <DashboardLayout title="Dashboard">
+    <DashboardLayout title="Documents">
       <div className="space-y-8 max-w-5xl">
-        <StatCards documents={documents} />
+        <DocumentUpload onUploaded={handleUploaded} />
 
-        <div className="space-y-3">
-          <h2 className="text-sm font-semibold">Upload a document</h2>
-          <DocumentUpload onUploaded={handleUploaded} />
-        </div>
-
-        <div className="space-y-3">
-          <h2 className="text-sm font-semibold">Recent documents</h2>
-          {loading ? (
-            <p className="text-sm text-muted-foreground">Loading...</p>
-          ) : (
-            <DocumentList
-              documents={documents.slice(0, 5)}
-              onUpdated={handleUpdated}
-              onDeleted={handleDeleted}
-            />
-          )}
-        </div>
+        {loading ? (
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        ) : (
+          <DocumentList
+            documents={documents}
+            onUpdated={handleUpdated}
+            onDeleted={handleDeleted}
+          />
+        )}
       </div>
     </DashboardLayout>
   );
