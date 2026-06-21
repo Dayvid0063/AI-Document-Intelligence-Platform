@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -38,6 +38,7 @@ class Document(Base):
     extracted_text = Column(Text, nullable=True)             # raw OCR text
     document_type = Column(String, nullable=True)            # e.g. "invoice", "contract"
     summary = Column(Text, nullable=True)                    # AI-generated summary
+    extracted_fields = Column(JSONB, nullable=True)          # structured key fields as JSON
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

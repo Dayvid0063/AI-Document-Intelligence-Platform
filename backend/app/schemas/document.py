@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -20,6 +20,7 @@ class DocumentResponse(BaseModel):
     document_type: Optional[str] = None
     summary: Optional[str] = None
     extracted_text: Optional[str] = None
+    extracted_fields: Optional[dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime
 

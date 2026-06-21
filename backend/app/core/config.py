@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     # --- Redis ---
     REDIS_URL: str = "redis://localhost:6379/0"
 
+    # --- DeepSeek AI ---
+    DEEPSEEK_API_KEY: str = ""
+    DEEPSEEK_MODEL: str = "deepseek-v4-flash"
+    DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
+
     # --- CORS ---
     FRONTEND_ORIGIN: str = "http://localhost:3000"
 

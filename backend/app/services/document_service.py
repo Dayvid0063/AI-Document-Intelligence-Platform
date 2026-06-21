@@ -126,6 +126,29 @@ def update_document_text(doc_id: str, extracted_text: str, db: Session) -> Docum
     return document
 
 
+def update_document_ai_results(
+    doc_id: str,
+    document_type: str,
+    summary: str,
+    extracted_fields: dict,
+    db: Session,
+) -> Document:
+    """
+    Save AI analysis results (classification, summary, extracted fields)
+    to the document record.
+    """
+    document = db.query(Document).filter(Document.id == doc_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    document.document_type = document_type
+    document.summary = summary
+    document.extracted_fields = extracted_fields
+    db.commit()
+    db.refresh(document)
+    return document
+
+
 def delete_document(doc_id: str, current_user: User, db: Session) -> None:
     """Delete a document record and its file from disk."""
     document = get_document_by_id(doc_id, current_user, db)
