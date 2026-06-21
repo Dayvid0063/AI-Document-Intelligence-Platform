@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, MoreVertical, Play, Trash2, Eye } from "lucide-react";
+import { FileText, MoreVertical, Play, Trash2, Eye, Sparkles } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import StatusBadge from "./StatusBadge";
@@ -35,6 +36,7 @@ function formatDate(iso: string): string {
 
 export default function DocumentList({ documents, onUpdated, onDeleted }: DocumentListProps) {
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
+  const [analyzingIds, setAnalyzingIds] = useState<Set<string>>(new Set());
   const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
 
   const handleProcess = async (doc: Document) => {
@@ -44,6 +46,22 @@ export default function DocumentList({ documents, onUpdated, onDeleted }: Docume
       onUpdated(updated);
     } finally {
       setProcessingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(doc.id);
+        return next;
+      });
+    }
+  };
+
+  const handleAnalyze = async (doc: Document) => {
+    setAnalyzingIds((prev) => new Set(prev).add(doc.id));
+    try {
+      const updated = await documentService.analyze(doc.id);
+      onUpdated(updated);
+      // Auto-open preview after analysis so user sees results immediately
+      setPreviewDoc(updated);
+    } finally {
+      setAnalyzingIds((prev) => {
         const next = new Set(prev);
         next.delete(doc.id);
         return next;
@@ -90,9 +108,16 @@ export default function DocumentList({ documents, onUpdated, onDeleted }: Docume
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="font-medium truncate max-w-[200px] sm:max-w-xs">
-                      {doc.original_filename}
-                    </span>
+                    <div className="min-w-0">
+                      <p className="font-medium truncate max-w-[180px] sm:max-w-xs">
+                        {doc.original_filename}
+                      </p>
+                      {doc.document_type && (
+                        <p className="text-xs text-muted-foreground capitalize mt-0.5">
+                          {doc.document_type.replace("_", " ")}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </td>
                 <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">
@@ -110,22 +135,47 @@ export default function DocumentList({ documents, onUpdated, onDeleted }: Docume
                       <MoreVertical className="h-4 w-4 text-muted-foreground" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      {doc.status === "completed" && (
-                        <DropdownMenuItem onClick={() => setPreviewDoc(doc)} className="cursor-pointer">
+                      {/* View — available if there's any content to show */}
+                      {(doc.extracted_text || doc.summary) && (
+                        <DropdownMenuItem
+                          onClick={() => setPreviewDoc(doc)}
+                          className="cursor-pointer"
+                        >
                           <Eye className="h-3.5 w-3.5 mr-2" />
-                          View extracted text
+                          View details
                         </DropdownMenuItem>
                       )}
-                      {doc.status !== "completed" && (
+
+                      {/* Run OCR — only if pending */}
+                      {doc.status === "pending" && (
                         <DropdownMenuItem
                           onClick={() => handleProcess(doc)}
                           disabled={processingIds.has(doc.id)}
                           className="cursor-pointer"
                         >
                           <Play className="h-3.5 w-3.5 mr-2" />
-                          {processingIds.has(doc.id) ? "Processing..." : "Run OCR"}
+                          {processingIds.has(doc.id) ? "Extracting..." : "Run OCR"}
                         </DropdownMenuItem>
                       )}
+
+                      {/* Analyze — available once OCR is done */}
+                      {doc.status === "completed" && (
+                        <>
+                          {(doc.extracted_text || doc.summary) && (
+                            <DropdownMenuSeparator />
+                          )}
+                          <DropdownMenuItem
+                            onClick={() => handleAnalyze(doc)}
+                            disabled={analyzingIds.has(doc.id)}
+                            className="cursor-pointer"
+                          >
+                            <Sparkles className="h-3.5 w-3.5 mr-2" />
+                            {analyzingIds.has(doc.id) ? "Analyzing..." : "Analyze with AI"}
+                          </DropdownMenuItem>
+                        </>
+                      )}
+
+                      <DropdownMenuSeparator />
                       <DropdownMenuItem
                         onClick={() => handleDelete(doc)}
                         className="cursor-pointer text-destructive focus:text-destructive"

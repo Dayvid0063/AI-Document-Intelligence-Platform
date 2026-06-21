@@ -9,6 +9,7 @@ export interface Document {
   document_type: string | null;
   summary: string | null;
   extracted_text: string | null;
+  extracted_fields: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }

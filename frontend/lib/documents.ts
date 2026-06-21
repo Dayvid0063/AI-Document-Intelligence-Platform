@@ -35,6 +35,11 @@ export const documentService = {
     return data;
   },
 
+  async analyze(id: string): Promise<Document> {
+    const { data } = await api.post<Document>(`/api/v1/documents/${id}/analyze`);
+    return data;
+  },
+
   async remove(id: string): Promise<void> {
     await api.delete(`/api/v1/documents/${id}`);
   },
