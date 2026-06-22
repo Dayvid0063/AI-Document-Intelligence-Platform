@@ -1,178 +1,140 @@
 # AI Document Intelligence Platform
 
-A lightweight document intelligence platform: upload PDFs/images, extract text via OCR,
-classify documents, extract structured data, and chat with your documents via RAG.
+A full-stack document intelligence platform that transforms unstructured documents into structured, searchable, and conversational data.
 
-## Project Structure
+> Think of it as a lightweight version of **Microsoft Azure AI Document Intelligence** or **Google Cloud Document AI**.
 
-```
-ai-doc-intelligence/
-├── backend/    # FastAPI + PostgreSQL + Redis + Celery
-└── frontend/   # Next.js + TypeScript + Tailwind + shadcn/ui
-```
+---
 
-## Backend Setup (Phase 1)
+## What it does
 
-### Prerequisites
-- Python 3.11+
-- PostgreSQL running locally (or via Docker)
-- Redis running locally (or via Docker) — needed later for Celery, optional for now
+Upload a PDF, image, or scanned document and the platform automatically:
 
-### 1. Create and activate a virtual environment
+1. **Extracts text** using OCR (Optical Character Recognition) — the process of reading text from images and scanned files
+2. **Classifies the document** — identifies whether it's an invoice, resume, contract, receipt, bank statement, and more
+3. **Summarizes the content** — generates a concise 2–3 sentence description
+4. **Extracts structured data** — pulls key fields into clean JSON (e.g. candidate name, skills, and experience from a resume; vendor, amount, and due date from an invoice)
+5. **Makes it searchable** — converts document meaning into a vector (a list of numbers representing semantic meaning) stored in a database, enabling search by *concept* rather than exact keywords
+6. **Enables conversation** — lets users ask natural language questions about their documents using RAG (Retrieval Augmented Generation), where the AI reads your actual documents before answering
 
-```bash
-cd backend
-python -m venv venv
+---
 
-# macOS/Linux
-source venv/bin/activate
+## Key features
 
-# Windows
-venv\Scripts\activate
-```
+### Document processing
+- Drag-and-drop file upload (PDF, PNG, JPG, TIFF — up to 10MB)
+- OCR text extraction via `pypdf` for text-based PDFs and Tesseract for scanned documents and images
+- Automatic fallback: if a PDF contains only scanned images, the platform detects this and switches to image-based OCR
 
-### 2. Install dependencies
+### AI intelligence (powered by DeepSeek)
+- **Document classification** — identifies document type from a defined taxonomy
+- **AI summarization** — concise natural language summary of every document
+- **Structured field extraction** — returns key data as typed JSON per document type
+- **Automatic pipeline** — OCR, classification, summarization, and embedding all run automatically on upload
 
-```bash
-pip install -r requirements.txt
-```
+### Semantic search (powered by OpenAI embeddings + pgvector)
+- Search documents by *meaning*, not just keywords
+- Searching "money owed" finds invoices even if that phrase never appears
+- Built on `pgvector` — PostgreSQL's native vector extension — no separate vector database needed
 
-### 3. Configure environment variables
+### RAG chat (powered by DeepSeek)
+- Ask questions about a specific document: *"What are this candidate's main skills?"*
+- Ask questions across all documents: *"Which documents mention Docker?"*
+- Answers are grounded in your actual document content, with source attribution
 
-```bash
-cp .env.example .env
-```
+### Export
+- Download extracted fields as CSV or Excel
+- Per-document or bulk export of all documents
 
-Then edit `.env`:
-- Set `DATABASE_URL` to your local PostgreSQL connection string.
-- Generate a strong `SECRET_KEY`:
-  ```bash
-  openssl rand -hex 32
-  ```
-  Paste the output as `SECRET_KEY` in `.env`.
+---
 
-### 4. Create the database
+## Tech stack
 
-Make sure PostgreSQL is running, then create the database referenced in `DATABASE_URL`:
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Next.js 16, TypeScript, Tailwind CSS, shadcn/ui |
+| Backend | FastAPI, Python 3.12 |
+| Database | PostgreSQL 16 with pgvector extension |
+| Cache | Redis 7 |
+| ORM & Migrations | SQLAlchemy 2, Alembic |
+| OCR | pypdf, Tesseract, pdf2image |
+| AI — Analysis & Chat | DeepSeek API (deepseek-v4-flash) |
+| AI — Embeddings | OpenAI API (text-embedding-3-small, 1536 dimensions) |
+| Infrastructure | Docker Compose |
 
-```bash
-createdb docintel
-```
+---
 
-(Or use `psql -U postgres -c "CREATE DATABASE docintel;"`)
-
-### 5. Run database migrations
-
-We'll generate the first migration once the User model is in place:
-
-```bash
-alembic revision --autogenerate -m "create users table"
-alembic upgrade head
-```
-
-### 6. Run the development server
-
-```bash
-uvicorn app.main:app --reload
-```
-
-The API will be available at: `http://localhost:8000`
-Interactive docs (Swagger UI): `http://localhost:8000/docs`
-
-### Test the auth flow
-
-1. `POST /api/v1/auth/register` — create an account, get back tokens.
-2. `POST /api/v1/auth/login` — log in with email/password, get back tokens.
-3. `GET /api/v1/auth/me` — pass `Authorization: Bearer <access_token>` to get your profile.
-
-## Frontend Setup
-
-### Prerequisites
-- Node.js 18+
-- npm
-
-### 1. Navigate to the frontend folder
-
-```bash
-cd frontend
-```
-
-### 2. Install dependencies
-
-```bash
-npm install
-```
-
-### 3. Configure environment variables
-
-```bash
-cp .env.local.example .env.local
-```
-
-The default value points to the local FastAPI backend:
-```
-NEXT_PUBLIC_API_URL=http://localhost:8000
-```
-
-### 4. Run the development server
-
-```bash
-npm run dev
-```
-
-The app will be available at: `http://localhost:3000`
-
-### Key pages
-- `/register` — Create a new account
-- `/login` — Sign in to your account
-- `/dashboard` — Main dashboard (protected, requires auth)
-
-## Project Structure
+## Project structure
 
 ```
 ai-doc-intelligence/
-├── backend/
+├── docker-compose.yml        # PostgreSQL (pgvector) + Redis
+├── README.md
+├── backend/                  # FastAPI application
 │   ├── app/
-│   │   ├── core/          # Config, database, security (JWT, bcrypt)
-│   │   ├── models/        # SQLAlchemy ORM models (DB tables)
-│   │   ├── schemas/       # Pydantic schemas (request/response validation)
-│   │   ├── api/v1/        # Versioned API routes
-│   │   │   └── endpoints/ # auth.py, documents.py
-│   │   ├── services/      # Business logic (document_service.py)
-│   │   └── alembic/       # Database migrations
-│   ├── uploads/           # Local file storage (gitignored, cloud storage in prod)
+│   │   ├── core/             # Config, database connection, JWT/bcrypt security
+│   │   ├── models/           # SQLAlchemy ORM models (users, documents)
+│   │   ├── schemas/          # Pydantic request/response schemas
+│   │   ├── api/v1/
+│   │   │   └── endpoints/    # auth, documents, search, chat, export
+│   │   ├── services/         # Business logic (OCR, AI, embeddings, RAG)
+│   │   └── alembic/          # Database migration history
+│   ├── uploads/              # Local file storage (gitignored)
 │   └── requirements.txt
-└── frontend/
+└── frontend/                 # Next.js application
     ├── app/
-    │   ├── (auth)/        # login/, register/ pages
-    │   └── (dashboard)/   # dashboard/ page (protected)
+    │   ├── (auth)/           # login, register pages
+    │   └── (dashboard)/      # dashboard, documents, search, chat, settings
     ├── components/
-    │   ├── auth/          # LoginForm, RegisterForm
-    │   └── ui/            # shadcn/ui components
-    ├── lib/               # api.ts (axios client), auth.ts (auth service)
-    └── types/             # TypeScript type definitions
+    │   ├── auth/             # LoginForm, RegisterForm
+    │   ├── documents/        # Upload, List, Preview, StatusBadge
+    │   └── layout/           # Sidebar, Topbar, DashboardLayout
+    ├── lib/                  # API client, auth service, document service, chat service
+    └── types/                # TypeScript type definitions
 ```
 
-## API Endpoints
+---
 
-### Authentication
+## API overview
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/v1/auth/register` | Register a new user |
-| POST | `/api/v1/auth/login` | Login and get JWT tokens |
+| POST | `/api/v1/auth/login` | Login, receive JWT tokens |
 | GET | `/api/v1/auth/me` | Get current user profile |
-
-### Documents
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/documents/upload` | Upload a document (PDF, PNG, JPEG, TIFF) |
-| GET | `/api/v1/documents/` | List all documents for current user |
-| GET | `/api/v1/documents/{id}` | Get a single document by ID |
+| POST | `/api/v1/documents/upload` | Upload + auto-process a document |
+| GET | `/api/v1/documents/` | List all user documents |
+| GET | `/api/v1/documents/{id}` | Get a single document |
+| POST | `/api/v1/documents/{id}/process` | Manually trigger OCR |
+| POST | `/api/v1/documents/{id}/analyze` | Manually trigger AI analysis |
+| POST | `/api/v1/documents/{id}/embed` | Manually trigger embedding |
 | DELETE | `/api/v1/documents/{id}` | Delete a document |
+| POST | `/api/v1/search/` | Semantic search across documents |
+| POST | `/api/v1/chat/` | Chat with one or all documents |
+| GET | `/api/v1/export/csv` | Export all documents as CSV |
+| GET | `/api/v1/export/excel` | Export all documents as Excel |
+| GET | `/api/v1/export/csv/{id}` | Export single document as CSV |
+| GET | `/api/v1/export/excel/{id}` | Export single document as Excel |
 
-## Roadmap
+---
 
-- [x] Phase 1 — MVP
-  - [x] JWT Authentication (register, login, protected routes)
-  - [x] File upload with validation (PDF, PNG, JPEG, TIFF, max 10MB)
-  - [x] Document metadata stored in PostgreSQL
+## Setup
+
+- **Backend setup** → see [`backend/README.md`](./backend/README.md)
+- **Frontend setup** → see [`frontend/README.md`](./frontend/README.md)
+
+---
+
+## Live demo
+
+> Coming soon — deployment in progress.
+
+---
+
+## Author
+
+**David Orji** — Full-stack & AI Engineer
+- GitHub: [@Dayvid0063](https://github.com/Dayvid0063)
+- LinkedIn: [david-orji](https://www.linkedin.com/in/david-orji-)
+- Portfolio: [david-portfolio-inky.vercel.app](https://david-portfolio-inky.vercel.app)
+
