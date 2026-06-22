@@ -10,6 +10,7 @@ export interface Document {
   summary: string | null;
   extracted_text: string | null;
   extracted_fields: Record<string, unknown> | null;
+  is_embedded: boolean;
   created_at: string;
   updated_at: string;
 }

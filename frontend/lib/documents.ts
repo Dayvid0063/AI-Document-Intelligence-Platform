@@ -1,9 +1,6 @@
 import api from "./api";
 import { Document, DocumentListResponse } from "@/types/document";
 
-/**
- * Document service — wraps all document-related API calls.
- */
 export const documentService = {
   async upload(file: File, onProgress?: (percent: number) => void): Promise<Document> {
     const formData = new FormData();
@@ -37,6 +34,11 @@ export const documentService = {
 
   async analyze(id: string): Promise<Document> {
     const { data } = await api.post<Document>(`/api/v1/documents/${id}/analyze`);
+    return data;
+  },
+
+  async embed(id: string): Promise<Document> {
+    const { data } = await api.post<Document>(`/api/v1/documents/${id}/embed`);
     return data;
   },
 

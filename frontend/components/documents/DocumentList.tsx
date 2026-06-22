@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, MoreVertical, Play, Trash2, Eye, Sparkles } from "lucide-react";
+import { FileText, MoreVertical, Play, Trash2, Eye, Sparkles, Cpu } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,6 +37,7 @@ function formatDate(iso: string): string {
 export default function DocumentList({ documents, onUpdated, onDeleted }: DocumentListProps) {
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
   const [analyzingIds, setAnalyzingIds] = useState<Set<string>>(new Set());
+  const [embeddingIds, setEmbeddingIds] = useState<Set<string>>(new Set());
   const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
 
   const handleProcess = async (doc: Document) => {
@@ -45,11 +46,7 @@ export default function DocumentList({ documents, onUpdated, onDeleted }: Docume
       const updated = await documentService.process(doc.id);
       onUpdated(updated);
     } finally {
-      setProcessingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(doc.id);
-        return next;
-      });
+      setProcessingIds((prev) => { const n = new Set(prev); n.delete(doc.id); return n; });
     }
   };
 
@@ -58,14 +55,19 @@ export default function DocumentList({ documents, onUpdated, onDeleted }: Docume
     try {
       const updated = await documentService.analyze(doc.id);
       onUpdated(updated);
-      // Auto-open preview after analysis so user sees results immediately
       setPreviewDoc(updated);
     } finally {
-      setAnalyzingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(doc.id);
-        return next;
-      });
+      setAnalyzingIds((prev) => { const n = new Set(prev); n.delete(doc.id); return n; });
+    }
+  };
+
+  const handleEmbed = async (doc: Document) => {
+    setEmbeddingIds((prev) => new Set(prev).add(doc.id));
+    try {
+      const updated = await documentService.embed(doc.id);
+      onUpdated(updated);
+    } finally {
+      setEmbeddingIds((prev) => { const n = new Set(prev); n.delete(doc.id); return n; });
     }
   };
 
@@ -79,9 +81,7 @@ export default function DocumentList({ documents, onUpdated, onDeleted }: Docume
       <div className="rounded-xl border border-dashed border-border p-12 text-center">
         <FileText className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
         <p className="text-sm font-medium">No documents yet</p>
-        <p className="text-xs text-muted-foreground mt-1">
-          Upload a file above to get started
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">Upload a file above to get started</p>
       </div>
     );
   }
@@ -101,10 +101,7 @@ export default function DocumentList({ documents, onUpdated, onDeleted }: Docume
           </thead>
           <tbody>
             {documents.map((doc) => (
-              <tr
-                key={doc.id}
-                className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
-              >
+              <tr key={doc.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -112,11 +109,19 @@ export default function DocumentList({ documents, onUpdated, onDeleted }: Docume
                       <p className="font-medium truncate max-w-[180px] sm:max-w-xs">
                         {doc.original_filename}
                       </p>
-                      {doc.document_type && (
-                        <p className="text-xs text-muted-foreground capitalize mt-0.5">
-                          {doc.document_type.replace("_", " ")}
-                        </p>
-                      )}
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        {doc.document_type && (
+                          <p className="text-xs text-muted-foreground capitalize">
+                            {doc.document_type.replace("_", " ")}
+                          </p>
+                        )}
+                        {doc.is_embedded && (
+                          <span className="inline-flex items-center gap-0.5 text-xs text-emerald-600">
+                            <Cpu className="h-2.5 w-2.5" />
+                            embedded
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </td>
@@ -135,18 +140,13 @@ export default function DocumentList({ documents, onUpdated, onDeleted }: Docume
                       <MoreVertical className="h-4 w-4 text-muted-foreground" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      {/* View — available if there's any content to show */}
                       {(doc.extracted_text || doc.summary) && (
-                        <DropdownMenuItem
-                          onClick={() => setPreviewDoc(doc)}
-                          className="cursor-pointer"
-                        >
+                        <DropdownMenuItem onClick={() => setPreviewDoc(doc)} className="cursor-pointer">
                           <Eye className="h-3.5 w-3.5 mr-2" />
                           View details
                         </DropdownMenuItem>
                       )}
 
-                      {/* Run OCR — only if pending */}
                       {doc.status === "pending" && (
                         <DropdownMenuItem
                           onClick={() => handleProcess(doc)}
@@ -158,12 +158,9 @@ export default function DocumentList({ documents, onUpdated, onDeleted }: Docume
                         </DropdownMenuItem>
                       )}
 
-                      {/* Analyze — available once OCR is done */}
                       {doc.status === "completed" && (
                         <>
-                          {(doc.extracted_text || doc.summary) && (
-                            <DropdownMenuSeparator />
-                          )}
+                          <DropdownMenuSeparator />
                           <DropdownMenuItem
                             onClick={() => handleAnalyze(doc)}
                             disabled={analyzingIds.has(doc.id)}
@@ -171,6 +168,14 @@ export default function DocumentList({ documents, onUpdated, onDeleted }: Docume
                           >
                             <Sparkles className="h-3.5 w-3.5 mr-2" />
                             {analyzingIds.has(doc.id) ? "Analyzing..." : "Analyze with AI"}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleEmbed(doc)}
+                            disabled={embeddingIds.has(doc.id)}
+                            className="cursor-pointer"
+                          >
+                            <Cpu className="h-3.5 w-3.5 mr-2" />
+                            {embeddingIds.has(doc.id) ? "Embedding..." : "Generate embedding"}
                           </DropdownMenuItem>
                         </>
                       )}

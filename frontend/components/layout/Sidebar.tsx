@@ -2,12 +2,21 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FileText, Settings, Sparkles } from "lucide-react";
+import {
+  LayoutDashboard,
+  FileText,
+  Search,
+  MessageSquare,
+  Settings,
+  Sparkles,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Documents", href: "/documents", icon: FileText },
+  { label: "Search", href: "/search", icon: Search },
+  { label: "Chat", href: "/chat", icon: MessageSquare },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 
@@ -21,9 +30,7 @@ export default function Sidebar() {
         <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
           <Sparkles className="h-4 w-4 text-primary-foreground" />
         </div>
-        <span className="font-semibold text-sm tracking-tight">
-          DocIntel
-        </span>
+        <span className="font-semibold text-sm tracking-tight">DocIntel</span>
       </div>
 
       {/* Nav */}
@@ -49,12 +56,10 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Footer note */}
+      {/* Footer */}
       <div className="px-6 py-4 border-t border-border">
-        <p className="text-xs text-muted-foreground">
-          AI Document Intelligence
-        </p>
-        <p className="text-xs text-muted-foreground/70">v1.0 — Phase 1</p>
+        <p className="text-xs text-muted-foreground">AI Document Intelligence</p>
+        <p className="text-xs text-muted-foreground/70">v1.0 — Phase 2</p>
       </div>
     </aside>
   );

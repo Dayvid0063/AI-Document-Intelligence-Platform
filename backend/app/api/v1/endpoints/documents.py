@@ -28,7 +28,8 @@ def upload_document(
     db: Session = Depends(get_db),
 ):
     """Upload a document (PDF, PNG, JPEG, TIFF)."""
-    return save_upload(file, current_user, db)
+    doc = save_upload(file, current_user, db)
+    return DocumentResponse.from_orm_with_embedding(doc)
 
 
 @router.get("/", response_model=DocumentListResponse)
@@ -38,7 +39,10 @@ def list_documents(
 ):
     """Return all documents uploaded by the current user."""
     documents = get_user_documents(current_user, db)
-    return DocumentListResponse(total=len(documents), documents=documents)
+    return DocumentListResponse(
+        total=len(documents),
+        documents=[DocumentResponse.from_orm_with_embedding(d) for d in documents],
+    )
 
 
 @router.get("/{doc_id}", response_model=DocumentResponse)
@@ -48,7 +52,8 @@ def get_document(
     db: Session = Depends(get_db),
 ):
     """Return a single document by ID."""
-    return get_document_by_id(doc_id, current_user, db)
+    doc = get_document_by_id(doc_id, current_user, db)
+    return DocumentResponse.from_orm_with_embedding(doc)
 
 
 @router.post("/{doc_id}/process", response_model=DocumentResponse)
@@ -57,12 +62,11 @@ def process_document(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Trigger OCR text extraction on an uploaded document.
-    """
+    """Trigger OCR text extraction on an uploaded document."""
     document = get_document_by_id(doc_id, current_user, db)
     extracted = extract_text(document.file_path, document.mime_type)
-    return update_document_text(doc_id, extracted, db)
+    doc = update_document_text(doc_id, extracted, db)
+    return DocumentResponse.from_orm_with_embedding(doc)
 
 
 @router.post("/{doc_id}/analyze", response_model=DocumentResponse)
@@ -71,27 +75,24 @@ def analyze_document_endpoint(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Run AI analysis — classification, summarization, structured extraction.
-    Requires OCR to have run first.
-    """
+    """Run AI analysis — classification, summarization, structured extraction."""
     document = get_document_by_id(doc_id, current_user, db)
 
     if not document.extracted_text:
         raise HTTPException(
             status_code=400,
-            detail="Document has no extracted text. Run OCR first via POST /{doc_id}/process.",
+            detail="Document has no extracted text. Run OCR first.",
         )
 
     result = analyze_document(document.extracted_text)
-
-    return update_document_ai_results(
+    doc = update_document_ai_results(
         doc_id=doc_id,
         document_type=result["document_type"],
         summary=result["summary"],
         extracted_fields=result["extracted_fields"],
         db=db,
     )
+    return DocumentResponse.from_orm_with_embedding(doc)
 
 
 @router.post("/{doc_id}/embed", response_model=DocumentResponse)
@@ -100,11 +101,7 @@ def embed_document(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Generate and store a vector embedding for a document.
-    Enables semantic search across documents.
-    Requires OCR to have run first.
-    """
+    """Generate and store a vector embedding for semantic search."""
     document = get_document_by_id(doc_id, current_user, db)
 
     if not document.extracted_text:
@@ -121,7 +118,8 @@ def embed_document(
             detail="Failed to generate embedding. Please try again.",
         )
 
-    return update_document_embedding(doc_id, embedding, db)
+    doc = update_document_embedding(doc_id, embedding, db)
+    return DocumentResponse.from_orm_with_embedding(doc)
 
 
 @router.delete("/{doc_id}", status_code=204)
