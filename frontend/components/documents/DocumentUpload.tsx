@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { UploadCloud, FileText, X, CheckCircle2, AlertCircle } from "lucide-react";
+import { UploadCloud, FileText, X, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { documentService } from "@/lib/documents";
 import { Document } from "@/types/document";
@@ -14,6 +14,7 @@ interface UploadingFile {
   progress: number;
   error: string | null;
   done: boolean;
+  processing: boolean; // true while OCR + AI + embed runs
 }
 
 interface DocumentUploadProps {
@@ -40,13 +41,20 @@ export default function DocumentUpload({ onUploaded }: DocumentUploadProps) {
 
     for (const file of files) {
       const error = validateFile(file);
-      const entry: UploadingFile = { file, progress: 0, error, done: false };
-
+      const entry: UploadingFile = { file, progress: 0, error, done: false, processing: false };
       setUploads((prev) => [...prev, entry]);
 
       if (error) continue;
 
       try {
+        // Upload + full pipeline runs server-side (OCR → AI → embed)
+        // We show "processing" state while the server works
+        setUploads((prev) =>
+          prev.map((u) =>
+            u.file === file ? { ...u, processing: true } : u
+          )
+        );
+
         const doc = await documentService.upload(file, (percent) => {
           setUploads((prev) =>
             prev.map((u) => (u.file === file ? { ...u, progress: percent } : u))
@@ -54,13 +62,17 @@ export default function DocumentUpload({ onUploaded }: DocumentUploadProps) {
         });
 
         setUploads((prev) =>
-          prev.map((u) => (u.file === file ? { ...u, done: true, progress: 100 } : u))
+          prev.map((u) =>
+            u.file === file ? { ...u, done: true, progress: 100, processing: false } : u
+          )
         );
         onUploaded(doc);
       } catch {
         setUploads((prev) =>
           prev.map((u) =>
-            u.file === file ? { ...u, error: "Upload failed. Try again." } : u
+            u.file === file
+              ? { ...u, error: "Upload failed. Try again.", processing: false }
+              : u
           )
         );
       }
@@ -70,9 +82,7 @@ export default function DocumentUpload({ onUploaded }: DocumentUploadProps) {
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    if (e.dataTransfer.files?.length) {
-      handleFiles(e.dataTransfer.files);
-    }
+    if (e.dataTransfer.files?.length) handleFiles(e.dataTransfer.files);
   };
 
   const dismiss = (file: File) => {
@@ -82,10 +92,7 @@ export default function DocumentUpload({ onUploaded }: DocumentUploadProps) {
   return (
     <div className="space-y-3">
       <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setIsDragging(true);
-        }}
+        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={onDrop}
         onClick={() => inputRef.current?.click()}
@@ -115,11 +122,13 @@ export default function DocumentUpload({ onUploaded }: DocumentUploadProps) {
             <p className="text-xs text-muted-foreground mt-1">
               PDF, PNG, JPG, TIFF — up to {MAX_SIZE_MB}MB
             </p>
+            <p className="text-xs text-muted-foreground/70 mt-0.5">
+              OCR, AI analysis, and embedding run automatically
+            </p>
           </div>
         </div>
       </div>
 
-      {/* Upload progress list */}
       {uploads.length > 0 && (
         <div className="space-y-2">
           {uploads.map((u, i) => (
@@ -132,6 +141,11 @@ export default function DocumentUpload({ onUploaded }: DocumentUploadProps) {
                 <p className="text-sm font-medium truncate">{u.file.name}</p>
                 {u.error ? (
                   <p className="text-xs text-destructive mt-0.5">{u.error}</p>
+                ) : u.processing ? (
+                  <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Running OCR, AI analysis &amp; embedding...
+                  </p>
                 ) : !u.done ? (
                   <div className="h-1 bg-muted rounded-full mt-1.5 overflow-hidden">
                     <div
@@ -139,21 +153,29 @@ export default function DocumentUpload({ onUploaded }: DocumentUploadProps) {
                       style={{ width: `${u.progress}%` }}
                     />
                   </div>
-                ) : null}
+                ) : (
+                  <p className="text-xs text-emerald-600 mt-0.5">
+                    Processed and ready to search
+                  </p>
+                )}
               </div>
               {u.error ? (
                 <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
               ) : u.done ? (
                 <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+              ) : u.processing ? (
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
               ) : (
                 <span className="text-xs text-muted-foreground shrink-0">{u.progress}%</span>
               )}
-              <button
-                onClick={() => dismiss(u.file)}
-                className="text-muted-foreground hover:text-foreground shrink-0"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
+              {(u.done || u.error) && (
+                <button
+                  onClick={() => dismiss(u.file)}
+                  className="text-muted-foreground hover:text-foreground shrink-0"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
           ))}
         </div>

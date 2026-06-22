@@ -24,9 +24,12 @@ pytesseract==0.3.13
 Pillow==10.3.0
 pdf2image==1.17.0
 
-# AI (OpenAI SDK pointed at DeepSeek's OpenAI-compatible API)
+# AI
 openai==1.57.0
 
-# Redis & background tasks (used from Phase 1 setup, expanded later)
+# Export
+openpyxl==3.1.2
+
+# Redis & background tasks
 redis==5.0.4
 celery==5.4.0

@@ -45,4 +45,30 @@ export const documentService = {
   async remove(id: string): Promise<void> {
     await api.delete(`/api/v1/documents/${id}`);
   },
+
+  async exportAllCsv(): Promise<void> {
+    await downloadExport("/api/v1/export/csv", "docintel_export.csv");
+  },
+
+  async exportAllExcel(): Promise<void> {
+    await downloadExport("/api/v1/export/excel", "docintel_export.xlsx");
+  },
 };
+
+async function downloadExport(url: string, defaultFilename: string): Promise<void> {
+  const token = localStorage.getItem("access_token");
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+  const res = await fetch(`${baseUrl}${url}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) throw new Error("Export failed");
+
+  const blob = await res.blob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = defaultFilename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}

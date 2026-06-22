@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { X, ChevronDown, ChevronUp, Sparkles, FileText } from "lucide-react";
+import { X, ChevronDown, ChevronUp, Sparkles, FileText, Download } from "lucide-react";
 import { Document } from "@/types/document";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 interface DocumentPreviewProps {
   document: Document;
@@ -74,6 +75,24 @@ export default function DocumentPreview({ document, onClose }: DocumentPreviewPr
     document.extracted_fields &&
     Object.keys(document.extracted_fields).length > 0;
 
+  const handleExport = (format: "csv" | "excel") => {
+    const ext = format === "csv" ? "csv" : "excel";
+    const url = `${process.env.NEXT_PUBLIC_API_URL}/api/v1/export/${ext}/${document.id}`;
+    const token = localStorage.getItem("access_token");
+
+    // Create a temporary anchor with auth header via fetch + blob
+    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => res.blob())
+      .then((blob) => {
+        const filename = `${document.original_filename.replace(/\.[^.]+$/, "")}_export.${format === "csv" ? "csv" : "xlsx"}`;
+        const a = window.document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
@@ -86,31 +105,50 @@ export default function DocumentPreview({ document, onClose }: DocumentPreviewPr
         {/* Header */}
         <div className="flex items-start justify-between px-5 py-4 border-b border-border shrink-0">
           <div className="min-w-0 pr-4">
-            <h3 className="text-sm font-semibold truncate">
-              {document.original_filename}
-            </h3>
+            <h3 className="text-sm font-semibold truncate">{document.original_filename}</h3>
             <div className="flex items-center gap-2 mt-1">
               {document.document_type && (
                 <span className="inline-flex items-center rounded-md bg-primary/10 text-primary px-2 py-0.5 text-xs font-medium capitalize">
                   {document.document_type.replace(/_/g, " ")}
                 </span>
               )}
-              <span className="text-xs text-muted-foreground">
-                {document.mime_type}
-              </span>
+              <span className="text-xs text-muted-foreground">{document.mime_type}</span>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-md hover:bg-muted text-muted-foreground shrink-0"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {hasExtractedFields && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => handleExport("csv")}
+                >
+                  <Download className="h-3 w-3" />
+                  CSV
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => handleExport("excel")}
+                >
+                  <Download className="h-3 w-3" />
+                  Excel
+                </Button>
+              </>
+            )}
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         {/* Scrollable content */}
         <div className="overflow-y-auto flex-1 px-5 py-4 space-y-5">
-
           {/* AI Summary */}
           {document.summary && (
             <div className="space-y-1.5">
