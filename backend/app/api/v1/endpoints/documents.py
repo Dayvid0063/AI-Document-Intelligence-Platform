@@ -12,9 +12,11 @@ from app.services.document_service import (
     delete_document,
     update_document_text,
     update_document_ai_results,
+    update_document_embedding,
 )
 from app.services.ocr_service import extract_text
 from app.services.ai_service import analyze_document
+from app.services.embedding_service import generate_embedding
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -25,11 +27,7 @@ def upload_document(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Upload a document (PDF, PNG, JPEG, TIFF).
-    Returns the document metadata record immediately.
-    OCR and AI processing will happen asynchronously (Phase 2).
-    """
+    """Upload a document (PDF, PNG, JPEG, TIFF)."""
     return save_upload(file, current_user, db)
 
 
@@ -61,11 +59,6 @@ def process_document(
 ):
     """
     Trigger OCR text extraction on an uploaded document.
-
-    Flow:
-    1. Fetch the document (validates ownership)
-    2. Run OCR/text extraction based on file type
-    3. Save extracted text and update status to completed/failed
     """
     document = get_document_by_id(doc_id, current_user, db)
     extracted = extract_text(document.file_path, document.mime_type)
@@ -79,13 +72,8 @@ def analyze_document_endpoint(
     db: Session = Depends(get_db),
 ):
     """
-    Run AI analysis on an already-processed document.
-    Requires OCR to have run first (status must be 'completed').
-
-    Returns the document updated with:
-    - document_type: classified type (invoice, resume, contract, etc.)
-    - summary: 2-3 sentence AI-generated summary
-    - extracted_fields: structured JSON of key data points
+    Run AI analysis — classification, summarization, structured extraction.
+    Requires OCR to have run first.
     """
     document = get_document_by_id(doc_id, current_user, db)
 
@@ -104,6 +92,36 @@ def analyze_document_endpoint(
         extracted_fields=result["extracted_fields"],
         db=db,
     )
+
+
+@router.post("/{doc_id}/embed", response_model=DocumentResponse)
+def embed_document(
+    doc_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Generate and store a vector embedding for a document.
+    Enables semantic search across documents.
+    Requires OCR to have run first.
+    """
+    document = get_document_by_id(doc_id, current_user, db)
+
+    if not document.extracted_text:
+        raise HTTPException(
+            status_code=400,
+            detail="Document has no extracted text. Run OCR first.",
+        )
+
+    embedding = generate_embedding(document.extracted_text)
+
+    if embedding is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to generate embedding. Please try again.",
+        )
+
+    return update_document_embedding(doc_id, embedding, db)
 
 
 @router.delete("/{doc_id}", status_code=204)

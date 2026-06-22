@@ -4,10 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """
     Centralized application settings.
-
     Values are loaded from environment variables / .env file.
-    Never hardcode secrets here — this file just defines the *shape*
-    of the config, the actual values live in .env (which is gitignored).
     """
 
     # --- App ---
@@ -27,10 +24,13 @@ class Settings(BaseSettings):
     # --- Redis ---
     REDIS_URL: str = "redis://localhost:6379/0"
 
-    # --- DeepSeek AI ---
+    # --- DeepSeek AI (classification, summarization, RAG chat) ---
     DEEPSEEK_API_KEY: str = ""
     DEEPSEEK_MODEL: str = "deepseek-v4-flash"
     DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
+
+    # --- OpenAI (embeddings only) ---
+    OPENAI_API_KEY: str = ""
 
     # --- CORS ---
     FRONTEND_ORIGIN: str = "http://localhost:3000"
@@ -42,5 +42,4 @@ class Settings(BaseSettings):
     )
 
 
-# Single shared instance — import this everywhere you need config
 settings = Settings()

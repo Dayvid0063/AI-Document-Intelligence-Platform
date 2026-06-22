@@ -65,7 +65,7 @@ def analyze_document(extracted_text: str) -> dict:
                     "content": f"Analyze this document:\n\n{text_to_analyze}",
                 },
             ],
-            max_tokens=1000,
+            max_tokens=2000,  # Increased from 1000 to prevent truncation
             temperature=0.1,
         )
 
@@ -76,12 +76,9 @@ def analyze_document(extracted_text: str) -> dict:
 
         # Strip markdown fences if model wraps output anyway
         if "```" in raw:
-            # Extract content between first ``` and last ```
             parts = raw.split("```")
-            # parts[1] is the content inside the fences
             if len(parts) >= 3:
                 raw = parts[1]
-                # Remove language identifier (e.g. "json\n")
                 if raw.startswith("json"):
                     raw = raw[4:]
             raw = raw.strip()

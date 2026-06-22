@@ -1,17 +1,13 @@
 import uuid
 import os
-import shutil
 from fastapi import UploadFile, HTTPException
 from sqlalchemy.orm import Session
 
 from app.models.document import Document
 from app.models.user import User
 
-# Where uploaded files are stored on disk
-# This path is relative to where you run uvicorn (the backend/ folder)
 UPLOAD_DIR = "uploads"
 
-# Allowed file types
 ALLOWED_MIME_TYPES = {
     "application/pdf",
     "image/png",
@@ -20,23 +16,13 @@ ALLOWED_MIME_TYPES = {
     "image/tiff",
 }
 
-# Max file size: 10MB
 MAX_FILE_SIZE = 10 * 1024 * 1024
 
 
 def save_upload(file: UploadFile, current_user: User, db: Session) -> Document:
     """
     Validates, saves the file to disk, and creates a DB record.
-
-    Steps:
-    1. Validate mime type
-    2. Read file into memory and check size
-    3. Generate a unique filename to avoid collisions
-    4. Save to /uploads/ directory
-    5. Create and return a Document DB record
     """
-
-    # 1. Validate mime type
     if file.content_type not in ALLOWED_MIME_TYPES:
         raise HTTPException(
             status_code=400,
@@ -44,30 +30,23 @@ def save_upload(file: UploadFile, current_user: User, db: Session) -> Document:
                    f"Allowed types: PDF, PNG, JPEG, TIFF.",
         )
 
-    # 2. Read file contents and check size
     contents = file.file.read()
     file_size = len(contents)
 
     if file_size > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=400,
-            detail=f"File size exceeds the 10MB limit.",
-        )
+        raise HTTPException(status_code=400, detail="File size exceeds the 10MB limit.")
 
     if file_size == 0:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
-    # 3. Generate a unique stored filename (UUID + original extension)
     ext = os.path.splitext(file.filename or "")[-1].lower()
     stored_filename = f"{uuid.uuid4()}{ext}"
     file_path = os.path.join(UPLOAD_DIR, stored_filename)
 
-    # 4. Ensure the uploads directory exists and save the file
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     with open(file_path, "wb") as f:
         f.write(contents)
 
-    # 5. Create DB record
     document = Document(
         user_id=current_user.id,
         original_filename=file.filename or stored_filename,
@@ -95,10 +74,7 @@ def get_user_documents(current_user: User, db: Session) -> list[Document]:
 
 
 def get_document_by_id(doc_id: str, current_user: User, db: Session) -> Document:
-    """
-    Fetch a single document by ID.
-    Raises 404 if not found, 403 if it belongs to another user.
-    """
+    """Fetch a single document by ID, validating ownership."""
     document = db.query(Document).filter(Document.id == doc_id).first()
 
     if not document:
@@ -111,10 +87,7 @@ def get_document_by_id(doc_id: str, current_user: User, db: Session) -> Document
 
 
 def update_document_text(doc_id: str, extracted_text: str, db: Session) -> Document:
-    """
-    Save extracted OCR text to a document and mark it as completed.
-    Called by the process endpoint after OCR runs successfully.
-    """
+    """Save extracted OCR text and mark document as completed."""
     document = db.query(Document).filter(Document.id == doc_id).first()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found.")
@@ -133,10 +106,7 @@ def update_document_ai_results(
     extracted_fields: dict,
     db: Session,
 ) -> Document:
-    """
-    Save AI analysis results (classification, summary, extracted fields)
-    to the document record.
-    """
+    """Save AI analysis results to the document record."""
     document = db.query(Document).filter(Document.id == doc_id).first()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found.")
@@ -149,11 +119,26 @@ def update_document_ai_results(
     return document
 
 
+def update_document_embedding(
+    doc_id: str,
+    embedding: list[float],
+    db: Session,
+) -> Document:
+    """Save the vector embedding for a document."""
+    document = db.query(Document).filter(Document.id == doc_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    document.embedding = embedding
+    db.commit()
+    db.refresh(document)
+    return document
+
+
 def delete_document(doc_id: str, current_user: User, db: Session) -> None:
     """Delete a document record and its file from disk."""
     document = get_document_by_id(doc_id, current_user, db)
 
-    # Remove file from disk
     if os.path.exists(document.file_path):
         os.remove(document.file_path)
 
