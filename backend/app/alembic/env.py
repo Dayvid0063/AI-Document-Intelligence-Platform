@@ -3,7 +3,6 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 
-# Import settings and Base/models so Alembic knows about our tables
 from app.core.config import settings
 from app.core.database import Base
 from app.models.user import User       # noqa: F401
@@ -11,13 +10,17 @@ from app.models.document import Document  # noqa: F401
 
 config = context.config
 
-# Override the sqlalchemy.url from alembic.ini with our actual DB URL from .env
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Fix DATABASE_URL scheme for psycopg3 compatibility
+# Railway injects postgresql:// but psycopg3 requires postgresql+psycopg://
+database_url = settings.DATABASE_URL
+if database_url.startswith("postgresql://"):
+    database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+
+config.set_main_option("sqlalchemy.url", database_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# This is the metadata Alembic uses to autogenerate migrations
 target_metadata = Base.metadata
 
 
