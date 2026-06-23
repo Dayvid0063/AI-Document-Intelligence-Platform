@@ -1,12 +1,12 @@
-import uuid
-import os
 from fastapi import UploadFile, HTTPException
 from sqlalchemy.orm import Session
 
 from app.models.document import Document
 from app.models.user import User
+from app.services.storage_service import upload_file, delete_file
 
-UPLOAD_DIR = "uploads"
+# Max file size: 10MB
+MAX_FILE_SIZE = 10 * 1024 * 1024
 
 ALLOWED_MIME_TYPES = {
     "application/pdf",
@@ -16,12 +16,11 @@ ALLOWED_MIME_TYPES = {
     "image/tiff",
 }
 
-MAX_FILE_SIZE = 10 * 1024 * 1024
-
 
 def save_upload(file: UploadFile, current_user: User, db: Session) -> Document:
     """
-    Validates, saves the file to disk, and creates a DB record.
+    Validates the file, uploads it to Cloudflare R2,
+    and creates a DB record with the R2 object key as file_path.
     """
     if file.content_type not in ALLOWED_MIME_TYPES:
         raise HTTPException(
@@ -39,19 +38,19 @@ def save_upload(file: UploadFile, current_user: User, db: Session) -> Document:
     if file_size == 0:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
-    ext = os.path.splitext(file.filename or "")[-1].lower()
-    stored_filename = f"{uuid.uuid4()}{ext}"
-    file_path = os.path.join(UPLOAD_DIR, stored_filename)
+    # Upload to R2 — returns (stored_filename, object_key)
+    stored_filename, object_key = upload_file(
+        file_bytes=contents,
+        original_filename=file.filename or "upload",
+        mime_type=file.content_type,
+    )
 
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-    with open(file_path, "wb") as f:
-        f.write(contents)
-
+    # Store R2 object key as file_path (not a local disk path anymore)
     document = Document(
         user_id=current_user.id,
         original_filename=file.filename or stored_filename,
         stored_filename=stored_filename,
-        file_path=file_path,
+        file_path=object_key,   # e.g. "documents/abc123.pdf"
         file_size=file_size,
         mime_type=file.content_type,
         status="pending",
@@ -136,11 +135,11 @@ def update_document_embedding(
 
 
 def delete_document(doc_id: str, current_user: User, db: Session) -> None:
-    """Delete a document record and its file from disk."""
+    """Delete a document record and its file from R2."""
     document = get_document_by_id(doc_id, current_user, db)
 
-    if os.path.exists(document.file_path):
-        os.remove(document.file_path)
+    # Delete from R2 using the stored object key
+    delete_file(document.file_path)
 
     db.delete(document)
     db.commit()

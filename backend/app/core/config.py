@@ -32,6 +32,13 @@ class Settings(BaseSettings):
     # --- OpenAI (embeddings only) ---
     OPENAI_API_KEY: str = ""
 
+    # --- Cloudflare R2 (file storage) ---
+    R2_ACCOUNT_ID: str = ""
+    R2_ACCESS_KEY_ID: str = ""
+    R2_SECRET_ACCESS_KEY: str = ""
+    R2_BUCKET_NAME: str = "docintel-uploads"
+    R2_ENDPOINT: str = ""  # https://<account_id>.r2.cloudflarestorage.com
+
     # --- CORS ---
     FRONTEND_ORIGIN: str = "http://localhost:3000"
 

@@ -1,76 +1,89 @@
 import os
+import tempfile
 import pytesseract
 from PIL import Image
 from pypdf import PdfReader
-from pdf2image import convert_from_path
+from pdf2image import convert_from_bytes
 
-# If Tesseract is not on PATH, point directly to the executable.
-# This is the default install path on Windows — adjust if yours differs.
+from app.services.storage_service import download_file
+
+# Windows Tesseract path — ignored on Linux (Railway) where tesseract is on PATH
 if os.name == "nt":
     pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
-# Poppler bin path for pdf2image on Windows
-# Download poppler and update this path to match your install location
-POPPLER_PATH = r"C:\Program Files\poppler\Library\bin"
-
-
-def extract_text_from_pdf(file_path: str) -> str:
-    """
-    Extract text from a PDF file.
-
-    Strategy:
-    1. Try pypdf first — works great for text-based PDFs (digitally created).
-    2. If pypdf returns little/no text, the PDF is likely scanned (image-based).
-       Fall back to pdf2image + pytesseract to OCR each page as an image.
-    """
-    # Attempt 1: pypdf direct text extraction
-    text = _extract_with_pypdf(file_path)
-
-    # If we got meaningful text, return it
-    if len(text.strip()) > 50:
-        return text.strip()
-
-    # Attempt 2: OCR fallback for scanned PDFs
-    return _extract_with_ocr_fallback(file_path)
-
-
-def extract_text_from_image(file_path: str) -> str:
-    """
-    Extract text from an image file (PNG, JPG, TIFF) using Tesseract OCR.
-    """
-    image = Image.open(file_path)
-    text = pytesseract.image_to_string(image)
-    return text.strip()
+# Windows Poppler path — ignored on Linux (Railway)
+POPPLER_PATH = r"C:\Program Files\poppler\Library\bin" if os.name == "nt" else None
 
 
 def extract_text(file_path: str, mime_type: str) -> str:
     """
-    Main entry point — routes to the right extractor based on file type.
+    Main entry point — downloads file from R2 into a temp file,
+    runs OCR, then cleans up the temp file.
 
     Args:
-        file_path: Path to the file on disk
-        mime_type: MIME type of the file (e.g. "application/pdf", "image/png")
+        file_path: R2 object key (e.g. "documents/abc123.pdf")
+        mime_type: MIME type of the file
 
     Returns:
         Extracted text string, or empty string if extraction fails
     """
     try:
+        # Download file bytes from R2
+        file_bytes = download_file(file_path)
+
         if mime_type == "application/pdf":
-            return extract_text_from_pdf(file_path)
+            return _extract_from_pdf_bytes(file_bytes)
         elif mime_type in ("image/png", "image/jpeg", "image/jpg", "image/tiff"):
-            return extract_text_from_image(file_path)
+            return _extract_from_image_bytes(file_bytes)
         else:
             return ""
+
     except Exception as e:
-        # Log and return empty string — don't crash the endpoint
-        print(f"OCR extraction failed for {file_path}: {e}")
+        print(f"[OCR ERROR]: {type(e).__name__}: {e}")
         return ""
 
 
-# ---- Private helpers ----
+def _extract_from_pdf_bytes(file_bytes: bytes) -> str:
+    """
+    Extract text from PDF bytes.
+
+    Strategy:
+    1. Try pypdf first — works for text-based PDFs
+    2. If insufficient text returned, fall back to Tesseract OCR
+       (for scanned/image-based PDFs)
+    """
+    # Attempt 1: pypdf direct extraction (write to temp file)
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(file_bytes)
+        tmp_path = tmp.name
+
+    try:
+        text = _extract_with_pypdf(tmp_path)
+        if len(text.strip()) > 50:
+            return text.strip()
+    finally:
+        os.unlink(tmp_path)  # Always clean up temp file
+
+    # Attempt 2: OCR fallback for scanned PDFs
+    return _extract_with_ocr_fallback(file_bytes)
+
+
+def _extract_from_image_bytes(file_bytes: bytes) -> str:
+    """Extract text from image bytes using Tesseract OCR."""
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+        tmp.write(file_bytes)
+        tmp_path = tmp.name
+
+    try:
+        image = Image.open(tmp_path)
+        text = pytesseract.image_to_string(image)
+        return text.strip()
+    finally:
+        os.unlink(tmp_path)
+
 
 def _extract_with_pypdf(file_path: str) -> str:
-    """Use pypdf to extract text directly from a PDF."""
+    """Use pypdf to extract text directly from a PDF file."""
     reader = PdfReader(file_path)
     pages_text = []
     for page in reader.pages:
@@ -80,15 +93,14 @@ def _extract_with_pypdf(file_path: str) -> str:
     return "\n".join(pages_text)
 
 
-def _extract_with_ocr_fallback(file_path: str) -> str:
+def _extract_with_ocr_fallback(file_bytes: bytes) -> str:
     """
-    Convert each PDF page to an image, then run Tesseract OCR on each.
-    Used when pypdf can't extract text (scanned/image-based PDFs).
+    Convert PDF pages to images using pdf2image (from bytes),
+    then run Tesseract OCR on each page image.
     """
     try:
-        # Convert PDF pages to PIL images
-        poppler_path = POPPLER_PATH if os.path.exists(POPPLER_PATH) else None
-        images = convert_from_path(file_path, poppler_path=poppler_path)
+        poppler_path = POPPLER_PATH if POPPLER_PATH and os.path.exists(POPPLER_PATH) else None
+        images = convert_from_bytes(file_bytes, poppler_path=poppler_path)
 
         pages_text = []
         for image in images:
@@ -98,5 +110,5 @@ def _extract_with_ocr_fallback(file_path: str) -> str:
 
         return "\n".join(pages_text)
     except Exception as e:
-        print(f"OCR fallback failed: {e}")
+        print(f"[OCR FALLBACK ERROR]: {e}")
         return ""
