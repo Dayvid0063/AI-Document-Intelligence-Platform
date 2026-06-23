@@ -1,0 +1,11 @@
+{
+  "builder": "railpack",
+  "install": {
+    "aptPackages": [
+      "tesseract-ocr",
+      "tesseract-ocr-eng",
+      "poppler-utils"
+    ]
+  },
+  "start": "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+}
