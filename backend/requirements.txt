@@ -8,8 +8,8 @@ alembic==1.13.1
 pgvector==0.3.2
 
 # Settings & env
-pydantic==2.7.4
-pydantic-settings==2.3.4
+pydantic==2.9.2
+pydantic-settings==2.5.2
 python-dotenv==1.0.1
 
 # Auth & security
