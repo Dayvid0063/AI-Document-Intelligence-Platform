@@ -3,26 +3,23 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 
 from app.core.config import settings
 
-# The "engine" manages the actual connection pool to PostgreSQL
-engine = create_engine(settings.DATABASE_URL)
+# Railway injects DATABASE_URL with postgresql:// scheme
+# but psycopg3 requires postgresql+psycopg://
+# This ensures the correct dialect is always used
+database_url = settings.DATABASE_URL
+if database_url.startswith("postgresql://"):
+    database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
 
-# Each instance of SessionLocal will be a new database session
+engine = create_engine(database_url)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Base class that all ORM models (tables) will inherit from
 Base = declarative_base()
 
 
 def get_db():
     """
     FastAPI dependency that provides a database session per-request.
-
-    Usage in an endpoint:
-        def my_endpoint(db: Session = Depends(get_db)):
-            ...
-
-    The session is automatically closed after the request finishes,
-    even if an error occurs.
     """
     db = SessionLocal()
     try:
