@@ -5,7 +5,6 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import { chatService } from "@/lib/chat";
 import { Document } from "@/types/document";
 import { Search, FileText, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import StatusBadge from "@/components/documents/StatusBadge";
 import DocumentPreview from "@/components/documents/DocumentPreview";
 
@@ -19,7 +18,6 @@ export default function SearchPage() {
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
-
     setLoading(true);
     setSearched(true);
     try {
@@ -34,70 +32,67 @@ export default function SearchPage() {
 
   return (
     <DashboardLayout title="Search">
-      <div className="max-w-3xl space-y-6">
+      <div className="max-w-3xl mx-auto space-y-5">
         {/* Header */}
         <div>
-          <h2 className="text-sm font-semibold">Semantic search</h2>
-          <p className="text-xs text-muted-foreground mt-1">
-            Search by meaning — finds relevant documents even without exact keyword matches.
-            Documents must be embedded first to appear in results.
+          <h2 className="text-base font-semibold" style={{ color: "var(--foreground)" }}>Semantic search</h2>
+          <p className="text-xs mt-0.5" style={{ color: "var(--foreground-muted)" }}>
+            Find documents by meaning — not just keywords. Documents must be embedded to appear.
           </p>
         </div>
 
-        {/* Search form */}
+        {/* Search input */}
         <form onSubmit={handleSearch} className="flex gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5" style={{ color: "var(--foreground-subtle)" }} />
             <input
-              type="text"
-              value={query}
+              type="text" value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder='Try "payment due date" or "software engineer with React"...'
-              className="w-full rounded-md border border-input bg-background pl-9 pr-4 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full rounded-lg pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] transition-shadow"
+              style={{ background: "var(--surface)", border: "1px solid var(--border-strong)", color: "var(--foreground)" }}
             />
           </div>
-          <Button type="submit" disabled={loading || !query.trim()}>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Search"}
-          </Button>
+          <button
+            type="submit"
+            disabled={loading || !query.trim()}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-white disabled:opacity-50 transition-opacity"
+            style={{ background: "var(--primary)" }}
+          >
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Search"}
+          </button>
         </form>
 
         {/* Results */}
         {searched && !loading && (
-          <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">
+          <div className="space-y-2">
+            <p className="text-xs" style={{ color: "var(--foreground-muted)" }}>
               {results.length === 0
                 ? "No results found. Make sure your documents have been embedded."
                 : `${results.length} result${results.length !== 1 ? "s" : ""} for "${query}"`}
             </p>
-
             {results.map((doc) => (
               <div
                 key={doc.id}
                 onClick={() => setPreviewDoc(doc)}
-                className="rounded-xl border border-border bg-card p-4 hover:bg-muted/30 transition-colors cursor-pointer"
+                className="rounded-xl border p-4 cursor-pointer transition-all duration-200 hover:border-[var(--border-strong)] hover:bg-[var(--surface-elevated)]"
+                style={{ background: "var(--surface)", borderColor: "var(--border)" }}
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted">
-                      <FileText className="h-4 w-4 text-muted-foreground" />
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg" style={{ background: "var(--surface-elevated)" }}>
+                      <FileText className="h-3.5 w-3.5" style={{ color: "var(--foreground-subtle)" }} />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{doc.original_filename}</p>
-                      {doc.summary && (
-                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                          {doc.summary}
-                        </p>
-                      )}
+                      <p className="text-sm font-medium truncate" style={{ color: "var(--foreground)" }}>{doc.original_filename}</p>
+                      {doc.summary && <p className="text-xs mt-0.5 line-clamp-1" style={{ color: "var(--foreground-muted)" }}>{doc.summary}</p>}
                     </div>
                   </div>
-                  <div className="shrink-0">
-                    <StatusBadge status={doc.status} />
-                  </div>
+                  <StatusBadge status={doc.status} />
                 </div>
-
                 {doc.document_type && (
-                  <div className="mt-3">
-                    <span className="inline-flex items-center rounded-md bg-primary/10 text-primary px-2 py-0.5 text-xs font-medium capitalize">
+                  <div className="mt-2">
+                    <span className="text-xs px-1.5 py-0.5 rounded capitalize" style={{ background: "var(--primary-muted)", color: "var(--primary)" }}>
                       {doc.document_type.replace(/_/g, " ")}
                     </span>
                   </div>
@@ -107,21 +102,17 @@ export default function SearchPage() {
           </div>
         )}
 
-        {/* Empty state before search */}
+        {/* Empty state */}
         {!searched && (
-          <div className="rounded-xl border border-dashed border-border p-12 text-center">
-            <Search className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-            <p className="text-sm font-medium">Search your documents</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Enter a query above to find relevant documents by meaning
-            </p>
+          <div className="rounded-xl border border-dashed p-12 text-center" style={{ borderColor: "var(--border-strong)" }}>
+            <Search className="h-7 w-7 mx-auto mb-2" style={{ color: "var(--foreground-subtle)" }} />
+            <p className="text-sm font-medium" style={{ color: "var(--foreground)" }}>Search your documents</p>
+            <p className="text-xs mt-1" style={{ color: "var(--foreground-muted)" }}>Enter a query above to find relevant documents by meaning</p>
           </div>
         )}
       </div>
 
-      {previewDoc && (
-        <DocumentPreview document={previewDoc} onClose={() => setPreviewDoc(null)} />
-      )}
+      {previewDoc && <DocumentPreview document={previewDoc} onClose={() => setPreviewDoc(null)} />}
     </DashboardLayout>
   );
 }

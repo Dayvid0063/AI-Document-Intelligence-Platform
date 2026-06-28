@@ -6,174 +6,113 @@ import { cn } from "@/lib/utils";
 import { documentService } from "@/lib/documents";
 import { Document } from "@/types/document";
 
-const ACCEPTED_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/jpg", "image/tiff"];
-const MAX_SIZE_MB = 10;
+const ACCEPTED = ["application/pdf", "image/png", "image/jpeg", "image/jpg", "image/tiff"];
+const MAX_MB = 10;
 
 interface UploadingFile {
   file: File;
   progress: number;
   error: string | null;
   done: boolean;
-  processing: boolean; // true while OCR + AI + embed runs
+  processing: boolean;
 }
 
-interface DocumentUploadProps {
-  onUploaded: (document: Document) => void;
+interface Props {
+  onUploaded: (doc: Document) => void;
 }
 
-export default function DocumentUpload({ onUploaded }: DocumentUploadProps) {
+export default function DocumentUpload({ onUploaded }: Props) {
   const [isDragging, setIsDragging] = useState(false);
   const [uploads, setUploads] = useState<UploadingFile[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const validateFile = (file: File): string | null => {
-    if (!ACCEPTED_TYPES.includes(file.type)) {
-      return "Unsupported file type. Use PDF, PNG, JPG, or TIFF.";
-    }
-    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
-      return `File exceeds ${MAX_SIZE_MB}MB limit.`;
-    }
+  const validate = (file: File) => {
+    if (!ACCEPTED.includes(file.type)) return "Unsupported type. Use PDF, PNG, JPG, or TIFF.";
+    if (file.size > MAX_MB * 1024 * 1024) return `Exceeds ${MAX_MB}MB limit.`;
     return null;
   };
 
   const handleFiles = useCallback(async (fileList: FileList) => {
-    const files = Array.from(fileList);
-
-    for (const file of files) {
-      const error = validateFile(file);
-      const entry: UploadingFile = { file, progress: 0, error, done: false, processing: false };
-      setUploads((prev) => [...prev, entry]);
-
+    for (const file of Array.from(fileList)) {
+      const error = validate(file);
+      setUploads((p) => [...p, { file, progress: 0, error, done: false, processing: false }]);
       if (error) continue;
 
       try {
-        // Upload + full pipeline runs server-side (OCR → AI → embed)
-        // We show "processing" state while the server works
-        setUploads((prev) =>
-          prev.map((u) =>
-            u.file === file ? { ...u, processing: true } : u
-          )
-        );
-
-        const doc = await documentService.upload(file, (percent) => {
-          setUploads((prev) =>
-            prev.map((u) => (u.file === file ? { ...u, progress: percent } : u))
-          );
+        setUploads((p) => p.map((u) => u.file === file ? { ...u, processing: true } : u));
+        const doc = await documentService.upload(file, (pct) => {
+          setUploads((p) => p.map((u) => u.file === file ? { ...u, progress: pct } : u));
         });
-
-        setUploads((prev) =>
-          prev.map((u) =>
-            u.file === file ? { ...u, done: true, progress: 100, processing: false } : u
-          )
-        );
+        setUploads((p) => p.map((u) => u.file === file ? { ...u, done: true, progress: 100, processing: false } : u));
         onUploaded(doc);
       } catch {
-        setUploads((prev) =>
-          prev.map((u) =>
-            u.file === file
-              ? { ...u, error: "Upload failed. Try again.", processing: false }
-              : u
-          )
-        );
+        setUploads((p) => p.map((u) => u.file === file ? { ...u, error: "Upload failed.", processing: false } : u));
       }
     }
   }, [onUploaded]);
 
-  const onDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    if (e.dataTransfer.files?.length) handleFiles(e.dataTransfer.files);
-  };
-
-  const dismiss = (file: File) => {
-    setUploads((prev) => prev.filter((u) => u.file !== file));
-  };
-
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <div
         onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
         onDragLeave={() => setIsDragging(false)}
-        onDrop={onDrop}
+        onDrop={(e) => { e.preventDefault(); setIsDragging(false); if (e.dataTransfer.files?.length) handleFiles(e.dataTransfer.files); }}
         onClick={() => inputRef.current?.click()}
         className={cn(
-          "rounded-xl border-2 border-dashed p-10 text-center cursor-pointer transition-colors",
-          isDragging
-            ? "border-primary bg-primary/5"
-            : "border-border hover:border-primary/50 hover:bg-muted/40"
+          "rounded-xl border-2 border-dashed p-8 text-center cursor-pointer transition-all duration-200",
+          isDragging ? "border-[var(--primary)] bg-[var(--primary-muted)]" : "border-[var(--border-strong)] hover:border-[var(--primary)] hover:bg-[var(--surface-elevated)]"
         )}
       >
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          accept={ACCEPTED_TYPES.join(",")}
-          className="hidden"
-          onChange={(e) => e.target.files && handleFiles(e.target.files)}
-        />
-        <div className="flex flex-col items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <UploadCloud className="h-6 w-6 text-primary" />
+        <input ref={inputRef} type="file" multiple accept={ACCEPTED.join(",")} className="hidden"
+          onChange={(e) => e.target.files && handleFiles(e.target.files)} />
+        <div className="flex flex-col items-center gap-2">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full" style={{ background: "var(--primary-muted)" }}>
+            <UploadCloud className="h-5 w-5" style={{ color: "var(--primary)" }} />
           </div>
           <div>
-            <p className="text-sm font-medium">
-              Drop files here or <span className="text-primary">browse</span>
+            <p className="text-sm font-medium" style={{ color: "var(--foreground)" }}>
+              Drop files or <span style={{ color: "var(--primary)" }}>browse</span>
             </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              PDF, PNG, JPG, TIFF — up to {MAX_SIZE_MB}MB
+            <p className="text-xs mt-0.5" style={{ color: "var(--foreground-muted)" }}>
+              PDF, PNG, JPG, TIFF — up to {MAX_MB}MB
             </p>
-            <p className="text-xs text-muted-foreground/70 mt-0.5">
-              OCR, AI analysis, and embedding run automatically
+            <p className="text-xs mt-0.5" style={{ color: "var(--foreground-subtle)" }}>
+              OCR, AI analysis &amp; embedding run automatically
             </p>
           </div>
         </div>
       </div>
 
       {uploads.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {uploads.map((u, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3"
-            >
-              <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+            <div key={i} className="flex items-center gap-3 rounded-lg border px-3 py-2.5"
+              style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+              <FileText className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--foreground-subtle)" }} />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{u.file.name}</p>
+                <p className="text-xs font-medium truncate" style={{ color: "var(--foreground)" }}>{u.file.name}</p>
                 {u.error ? (
-                  <p className="text-xs text-destructive mt-0.5">{u.error}</p>
+                  <p className="text-xs mt-0.5" style={{ color: "var(--destructive)" }}>{u.error}</p>
                 ) : u.processing ? (
-                  <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                  <p className="text-xs mt-0.5 flex items-center gap-1" style={{ color: "var(--foreground-muted)" }}>
                     <Loader2 className="h-3 w-3 animate-spin" />
-                    Running OCR, AI analysis &amp; embedding...
+                    Processing pipeline...
                   </p>
                 ) : !u.done ? (
-                  <div className="h-1 bg-muted rounded-full mt-1.5 overflow-hidden">
-                    <div
-                      className="h-full bg-primary transition-all duration-300"
-                      style={{ width: `${u.progress}%` }}
-                    />
+                  <div className="h-1 rounded-full mt-1.5 overflow-hidden" style={{ background: "var(--border)" }}>
+                    <div className="h-full rounded-full transition-all" style={{ width: `${u.progress}%`, background: "var(--primary)" }} />
                   </div>
                 ) : (
-                  <p className="text-xs text-emerald-600 mt-0.5">
-                    Processed and ready to search
-                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: "var(--success)" }}>Ready to search</p>
                 )}
               </div>
-              {u.error ? (
-                <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
-              ) : u.done ? (
-                <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-              ) : u.processing ? (
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
-              ) : (
-                <span className="text-xs text-muted-foreground shrink-0">{u.progress}%</span>
-              )}
+              {u.error ? <AlertCircle className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--destructive)" }} />
+                : u.done ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--success)" }} />
+                : u.processing ? <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" style={{ color: "var(--foreground-muted)" }} />
+                : <span className="text-xs shrink-0" style={{ color: "var(--foreground-muted)" }}>{u.progress}%</span>}
               {(u.done || u.error) && (
-                <button
-                  onClick={() => dismiss(u.file)}
-                  className="text-muted-foreground hover:text-foreground shrink-0"
-                >
-                  <X className="h-3.5 w-3.5" />
+                <button onClick={() => setUploads((p) => p.filter((_, j) => j !== i))} style={{ color: "var(--foreground-subtle)" }}>
+                  <X className="h-3 w-3" />
                 </button>
               )}
             </div>

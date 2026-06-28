@@ -1,22 +1,24 @@
-import api from "./api";
-import { AuthTokens, LoginPayload, RegisterPayload, User } from "@/types/auth";
-
 /**
- * Auth service — wraps all auth-related API calls.
- * Components call these functions instead of calling axios directly,
- * keeping API logic out of UI components.
+ * Auth service — thin API wrapper.
+ * State management is handled by useAuthStore.
+ * Components should use useAuthStore actions (login, register, logout)
+ * rather than calling these directly.
  */
+import api from "./api";
+import { AuthTokens, User } from "@/types/auth";
 
 export const authService = {
-  async register(payload: RegisterPayload): Promise<AuthTokens> {
-    const { data } = await api.post<AuthTokens>("/api/v1/auth/register", payload);
-    saveTokens(data);
+  async login(payload: { email: string; password: string }): Promise<AuthTokens> {
+    const { data } = await api.post<AuthTokens>("/api/v1/auth/login", payload);
     return data;
   },
 
-  async login(payload: LoginPayload): Promise<AuthTokens> {
-    const { data } = await api.post<AuthTokens>("/api/v1/auth/login", payload);
-    saveTokens(data);
+  async register(payload: {
+    email: string;
+    password: string;
+    full_name?: string;
+  }): Promise<AuthTokens> {
+    const { data } = await api.post<AuthTokens>("/api/v1/auth/register", payload);
     return data;
   },
 
@@ -26,19 +28,20 @@ export const authService = {
   },
 
   logout() {
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
-    window.location.href = "/login";
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("docintel-auth");
+      window.location.href = "/login";
+    }
   },
 
   isAuthenticated(): boolean {
     if (typeof window === "undefined") return false;
-    return !!localStorage.getItem("access_token");
+    try {
+      const raw = localStorage.getItem("docintel-auth");
+      const parsed = raw ? JSON.parse(raw) : null;
+      return !!parsed?.state?.access_token;
+    } catch {
+      return false;
+    }
   },
 };
-
-// Helper — saves tokens to localStorage after login/register
-function saveTokens(tokens: AuthTokens) {
-  localStorage.setItem("access_token", tokens.access_token);
-  localStorage.setItem("refresh_token", tokens.refresh_token);
-}

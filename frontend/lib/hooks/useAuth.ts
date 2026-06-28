@@ -1,32 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { authService } from "@/lib/auth";
-import { User } from "@/types/auth";
+import { useAuthStore } from "@/lib/stores/useAuthStore";
 
 /**
- * Shared hook for protected pages.
- * Redirects to /login if not authenticated, otherwise fetches and
- * returns the current user profile.
+ * Thin wrapper around useAuthStore for backward compatibility.
+ * Components that previously used useAuth() still work unchanged.
  */
 export function useAuth() {
-  const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!authService.isAuthenticated()) {
-      router.push("/login");
-      return;
-    }
-
-    authService
-      .getMe()
-      .then(setUser)
-      .catch(() => authService.logout())
-      .finally(() => setLoading(false));
-  }, [router]);
-
-  return { user, loading };
+  const { user, loading, isAuthenticated } = useAuthStore();
+  return { user, loading, isAuthenticated };
 }

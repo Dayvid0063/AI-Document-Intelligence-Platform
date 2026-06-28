@@ -1,4 +1,3 @@
-import { Card, CardContent } from "@/components/ui/card";
 import { FileText, CheckCircle2, Clock, AlertCircle } from "lucide-react";
 import { Document } from "@/types/document";
 
@@ -13,26 +12,32 @@ export default function StatCards({ documents }: StatCardsProps) {
   const failed = documents.filter((d) => d.status === "failed").length;
 
   const stats = [
-    { label: "Total Documents", value: total, icon: FileText, color: "text-foreground" },
-    { label: "Processed", value: completed, icon: CheckCircle2, color: "text-emerald-500" },
-    { label: "Pending", value: pending, icon: Clock, color: "text-amber-500" },
-    { label: "Failed", value: failed, icon: AlertCircle, color: "text-red-500" },
+    { label: "Total", value: total, icon: FileText, color: "var(--foreground-muted)" },
+    { label: "Processed", value: completed, icon: CheckCircle2, color: "var(--success)" },
+    { label: "Pending", value: pending, icon: Clock, color: "var(--warning)" },
+    { label: "Failed", value: failed, icon: AlertCircle, color: "var(--destructive)" },
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       {stats.map((stat) => {
         const Icon = stat.icon;
         return (
-          <Card key={stat.label} className="border-border shadow-none">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-muted-foreground">{stat.label}</p>
-                <Icon className={`h-3.5 w-3.5 ${stat.color}`} />
-              </div>
-              <p className="text-2xl font-semibold mt-2">{stat.value}</p>
-            </CardContent>
-          </Card>
+          <div
+            key={stat.label}
+            className="rounded-xl border p-4"
+            style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium" style={{ color: "var(--foreground-muted)" }}>
+                {stat.label}
+              </p>
+              <Icon className="h-3.5 w-3.5" style={{ color: stat.color }} />
+            </div>
+            <p className="text-2xl font-bold" style={{ color: "var(--foreground)" }}>
+              {stat.value}
+            </p>
+          </div>
         );
       })}
     </div>

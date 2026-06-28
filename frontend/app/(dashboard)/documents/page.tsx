@@ -1,47 +1,37 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import DocumentUpload from "@/components/documents/DocumentUpload";
 import DocumentList from "@/components/documents/DocumentList";
-import { documentService } from "@/lib/documents";
+import { useDocumentStore } from "@/lib/stores/useDocumentStore";
 import { Document } from "@/types/document";
 
 export default function DocumentsPage() {
-  const [documents, setDocuments] = useState<Document[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    documentService
-      .list()
-      .then((res) => setDocuments(res.documents))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const handleUploaded = (doc: Document) => {
-    setDocuments((prev) => [doc, ...prev]);
-  };
-
-  const handleUpdated = (doc: Document) => {
-    setDocuments((prev) => prev.map((d) => (d.id === doc.id ? doc : d)));
-  };
-
-  const handleDeleted = (id: string) => {
-    setDocuments((prev) => prev.filter((d) => d.id !== id));
-  };
+  const { documents, loading, addDocument, updateDocument, removeDocument } = useDocumentStore();
 
   return (
     <DashboardLayout title="Documents">
-      <div className="space-y-8 max-w-5xl">
-        <DocumentUpload onUploaded={handleUploaded} />
+      <div className="max-w-5xl mx-auto space-y-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold" style={{ color: "var(--foreground)" }}>
+              Your documents
+            </h2>
+            <p className="text-xs mt-0.5" style={{ color: "var(--foreground-muted)" }}>
+              {documents.length} document{documents.length !== 1 ? "s" : ""} in your workspace
+            </p>
+          </div>
+        </div>
+
+        <DocumentUpload onUploaded={(doc: Document) => addDocument(doc)} />
 
         {loading ? (
-          <p className="text-sm text-muted-foreground">Loading...</p>
+          <p className="text-xs py-6 text-center" style={{ color: "var(--foreground-muted)" }}>Loading...</p>
         ) : (
           <DocumentList
             documents={documents}
-            onUpdated={handleUpdated}
-            onDeleted={handleDeleted}
+            onUpdated={(doc: Document) => updateDocument(doc)}
+            onDeleted={(id: string) => removeDocument(id)}
           />
         )}
       </div>
