@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -17,12 +17,15 @@ from app.services.document_service import (
 from app.services.ocr_service import extract_text
 from app.services.ai_service import analyze_document
 from app.services.embedding_service import generate_embedding
+from app.core.limiter import limiter
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
 
 @router.post("/upload", response_model=DocumentResponse, status_code=201)
+@limiter.limit("20/hour")  # 20 per hour per user
 def upload_document(
+    request: Request,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),

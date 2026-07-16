@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -11,12 +11,18 @@ from app.core.security import (
 from app.models.user import User
 from app.schemas.user import UserCreate, UserLogin, UserResponse, Token
 from app.api.deps import get_current_active_user
+from app.core.limiter import limiter, get_ip_address
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
-def register(payload: UserCreate, db: Session = Depends(get_db)):
+@limiter.limit("5/hour", key_func=get_ip_address)  # 5 per hour per IP
+def register(
+    request: Request,
+    payload: UserCreate,
+    db: Session = Depends(get_db),
+):
     """
     Create a new user account.
 
@@ -49,7 +55,12 @@ def register(payload: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
-def login(payload: UserLogin, db: Session = Depends(get_db)):
+@limiter.limit("10/hour", key_func=get_ip_address)  # 10 per hour per IP
+def login(
+    request: Request,
+    payload: UserLogin,
+    db: Session = Depends(get_db),
+):
     """
     Authenticate a user and return JWT tokens.
 

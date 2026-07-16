@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
@@ -7,6 +7,7 @@ from app.core.database import get_db
 from app.api.deps import get_current_active_user
 from app.models.user import User
 from app.services.rag_service import chat_with_document, chat_with_all_documents
+from app.core.limiter import limiter
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
@@ -29,7 +30,9 @@ class ChatResponse(BaseModel):
 
 
 @router.post("/", response_model=ChatResponse)
+@limiter.limit("50/hour")  # 50 per hour per user
 def chat(
+    request: Request,
     payload: ChatRequest,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),

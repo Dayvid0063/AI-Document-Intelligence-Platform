@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -7,6 +7,7 @@ from app.api.deps import get_current_active_user
 from app.models.user import User
 from app.schemas.document import DocumentResponse
 from app.services.rag_service import semantic_search
+from app.core.limiter import limiter
 
 router = APIRouter(prefix="/search", tags=["Search"])
 
@@ -22,7 +23,9 @@ class SearchResponse(BaseModel):
 
 
 @router.post("/", response_model=SearchResponse)
+@limiter.limit("100/hour")  # 100 per hour per user
 def search_documents(
+    request: Request,
     payload: SearchRequest,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
