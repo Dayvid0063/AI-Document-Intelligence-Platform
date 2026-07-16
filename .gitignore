@@ -20,3 +20,5 @@ backend/uploads/*
 # IDE
 .vscode/
 .idea/
+.claude/
+docs/

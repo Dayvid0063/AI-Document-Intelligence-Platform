@@ -28,49 +28,25 @@ def upload_document(
     db: Session = Depends(get_db),
 ):
     """
-    Upload a document and automatically run the full pipeline:
-    1. Save file to disk + create DB record
-    2. Extract text via OCR
-    3. Analyze with AI (classify, summarize, extract fields)
-    4. Generate vector embedding for semantic search
+    Upload a document and queue background processing pipeline:
+    1. Save file to R2 + create DB record
+    2. Queue background task for OCR → AI analysis → embedding
+    3. Return document immediately with status: "pending"
 
-    Returns the fully processed document in one shot.
+    Background processing steps (handled by Celery worker):
+    1. Extract text via OCR
+    2. Analyze with AI (classify, summarize, extract fields)
+    3. Generate vector embedding for semantic search
     """
-    # Step 1: Save file
+    # Step 1: Save file and create DB record (status: "pending")
     doc = save_upload(file, current_user, db)
 
-    # Step 2: OCR extraction
-    try:
-        extracted = extract_text(doc.file_path, doc.mime_type)
-        doc = update_document_text(str(doc.id), extracted, db)
-    except Exception as e:
-        print(f"[PIPELINE OCR ERROR]: {e}")
-        return DocumentResponse.from_orm_with_embedding(doc)
+    # Step 2: Queue background task for processing pipeline
+    # Import here to avoid circular imports
+    from app.tasks.document_tasks import process_document_pipeline
+    process_document_pipeline.delay(str(doc.id))
 
-    if not doc.extracted_text:
-        return DocumentResponse.from_orm_with_embedding(doc)
-
-    # Step 3: AI analysis
-    try:
-        result = analyze_document(doc.extracted_text)
-        doc = update_document_ai_results(
-            doc_id=str(doc.id),
-            document_type=result["document_type"],
-            summary=result["summary"],
-            extracted_fields=result["extracted_fields"],
-            db=db,
-        )
-    except Exception as e:
-        print(f"[PIPELINE AI ERROR]: {e}")
-
-    # Step 4: Generate embedding
-    try:
-        embedding = generate_embedding(doc.extracted_text)
-        if embedding:
-            doc = update_document_embedding(str(doc.id), embedding, db)
-    except Exception as e:
-        print(f"[PIPELINE EMBED ERROR]: {e}")
-
+    # Step 3: Return immediately with pending status
     return DocumentResponse.from_orm_with_embedding(doc)
 
 
@@ -94,8 +70,8 @@ def get_document(
     db: Session = Depends(get_db),
 ):
     """Return a single document by ID."""
-    doc = get_document_by_id(doc_id, current_user, db)
-    return DocumentResponse.from_orm_with_embedding(doc)
+    document = get_document_by_id(doc_id, current_user, db)
+    return DocumentResponse.from_orm_with_embedding(document)
 
 
 @router.post("/{doc_id}/process", response_model=DocumentResponse)
@@ -170,5 +146,5 @@ def remove_document(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
-    """Delete a document and its file from disk."""
+    """Delete a document and its file from R2."""
     delete_document(doc_id, current_user, db)
