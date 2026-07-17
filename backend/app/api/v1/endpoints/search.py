@@ -8,6 +8,7 @@ from app.models.user import User
 from app.schemas.document import DocumentResponse
 from app.services.rag_service import semantic_search
 from app.core.limiter import limiter
+from app.services.audit_service import log_action
 
 router = APIRouter(prefix="/search", tags=["Search"])
 
@@ -45,6 +46,17 @@ def search_documents(
         db=db,
         limit=10,
     )
+
+    try:
+        log_action(
+            db=db,
+            action="search.query",
+            user_id=str(current_user.id),
+            extra_data={"query": payload.query, "results_count": len(results)},
+            ip_address=request.client.host if request.client else None,
+        )
+    except Exception as e:
+        print(f"[AUDIT LOG ERROR]: {e}")
 
     return SearchResponse(
         query=payload.query,

@@ -18,6 +18,7 @@ from app.services.ocr_service import extract_text
 from app.services.ai_service import analyze_document
 from app.services.embedding_service import generate_embedding
 from app.core.limiter import limiter
+from app.services.audit_service import log_action
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -48,6 +49,18 @@ def upload_document(
     # Import here to avoid circular imports
     from app.tasks.document_tasks import process_document_pipeline
     process_document_pipeline.delay(str(doc.id))
+
+    try:
+        log_action(
+            db=db,
+            action="document.upload",
+            user_id=str(current_user.id),
+            resource_id=str(doc.id),
+            extra_data={"filename": doc.original_filename, "file_size": doc.file_size},
+            ip_address=request.client.host if request.client else None,
+        )
+    except Exception as e:
+        print(f"[AUDIT LOG ERROR]: {e}")
 
     # Step 3: Return immediately with pending status
     return DocumentResponse.from_orm_with_embedding(doc)
@@ -80,6 +93,7 @@ def get_document(
 @router.post("/{doc_id}/process", response_model=DocumentResponse)
 def process_document(
     doc_id: str,
+    request: Request,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
@@ -87,12 +101,26 @@ def process_document(
     document = get_document_by_id(doc_id, current_user, db)
     extracted = extract_text(document.file_path, document.mime_type)
     doc = update_document_text(doc_id, extracted, db)
+
+    try:
+        log_action(
+            db=db,
+            action="document.process",
+            user_id=str(current_user.id),
+            resource_id=str(doc.id),
+            extra_data={"filename": doc.original_filename},
+            ip_address=request.client.host if request.client else None,
+        )
+    except Exception as e:
+        print(f"[AUDIT LOG ERROR]: {e}")
+
     return DocumentResponse.from_orm_with_embedding(doc)
 
 
 @router.post("/{doc_id}/analyze", response_model=DocumentResponse)
 def analyze_document_endpoint(
     doc_id: str,
+    request: Request,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
@@ -113,12 +141,26 @@ def analyze_document_endpoint(
         extracted_fields=result["extracted_fields"],
         db=db,
     )
+
+    try:
+        log_action(
+            db=db,
+            action="document.analyze",
+            user_id=str(current_user.id),
+            resource_id=str(doc.id),
+            extra_data={"filename": doc.original_filename, "document_type": doc.document_type},
+            ip_address=request.client.host if request.client else None,
+        )
+    except Exception as e:
+        print(f"[AUDIT LOG ERROR]: {e}")
+
     return DocumentResponse.from_orm_with_embedding(doc)
 
 
 @router.post("/{doc_id}/embed", response_model=DocumentResponse)
 def embed_document(
     doc_id: str,
+    request: Request,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
@@ -140,14 +182,42 @@ def embed_document(
         )
 
     doc = update_document_embedding(doc_id, embedding, db)
+
+    try:
+        log_action(
+            db=db,
+            action="document.embed",
+            user_id=str(current_user.id),
+            resource_id=str(doc.id),
+            extra_data={"filename": doc.original_filename},
+            ip_address=request.client.host if request.client else None,
+        )
+    except Exception as e:
+        print(f"[AUDIT LOG ERROR]: {e}")
+
     return DocumentResponse.from_orm_with_embedding(doc)
 
 
 @router.delete("/{doc_id}", status_code=204)
 def remove_document(
     doc_id: str,
+    request: Request,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
     """Delete a document and its file from R2."""
+    document = get_document_by_id(doc_id, current_user, db)
+    filename = document.original_filename
     delete_document(doc_id, current_user, db)
+
+    try:
+        log_action(
+            db=db,
+            action="document.delete",
+            user_id=str(current_user.id),
+            resource_id=doc_id,
+            extra_data={"filename": filename},
+            ip_address=request.client.host if request.client else None,
+        )
+    except Exception as e:
+        print(f"[AUDIT LOG ERROR]: {e}")

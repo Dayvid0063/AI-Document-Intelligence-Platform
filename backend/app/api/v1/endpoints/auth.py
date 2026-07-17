@@ -12,6 +12,7 @@ from app.models.user import User
 from app.schemas.user import UserCreate, UserLogin, UserResponse, Token
 from app.api.deps import get_current_active_user
 from app.core.limiter import limiter, get_ip_address
+from app.services.audit_service import log_action
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -51,6 +52,17 @@ def register(
     access_token = create_access_token(subject=str(new_user.id))
     refresh_token = create_refresh_token(subject=str(new_user.id))
 
+    try:
+        log_action(
+            db=db,
+            action="user.register",
+            user_id=str(new_user.id),
+            extra_data={"email": new_user.email},
+            ip_address=request.client.host if request.client else None,
+        )
+    except Exception as e:
+        print(f"[AUDIT LOG ERROR]: {e}")
+
     return Token(access_token=access_token, refresh_token=refresh_token)
 
 
@@ -72,6 +84,16 @@ def login(
     user = db.query(User).filter(User.email == payload.email).first()
 
     if not user or not verify_password(payload.password, user.hashed_password):
+        try:
+            log_action(
+                db=db,
+                action="user.login_failed",
+                extra_data={"email": payload.email},
+                ip_address=request.client.host if request.client else None,
+            )
+        except Exception as e:
+            print(f"[AUDIT LOG ERROR]: {e}")
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -83,6 +105,17 @@ def login(
 
     access_token = create_access_token(subject=str(user.id))
     refresh_token = create_refresh_token(subject=str(user.id))
+
+    try:
+        log_action(
+            db=db,
+            action="user.login",
+            user_id=str(user.id),
+            extra_data={"email": user.email},
+            ip_address=request.client.host if request.client else None,
+        )
+    except Exception as e:
+        print(f"[AUDIT LOG ERROR]: {e}")
 
     return Token(access_token=access_token, refresh_token=refresh_token)
 

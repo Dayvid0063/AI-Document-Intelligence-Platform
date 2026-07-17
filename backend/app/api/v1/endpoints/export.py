@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 
 import openpyxl
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -13,6 +13,7 @@ from app.api.deps import get_current_active_user
 from app.models.user import User
 from app.models.document import Document
 from app.services.document_service import get_document_by_id
+from app.services.audit_service import log_action
 
 router = APIRouter(prefix="/export", tags=["Export"])
 
@@ -82,6 +83,7 @@ def get_export_rows(documents: list[Document]) -> tuple[list[str], list[dict]]:
 
 @router.get("/csv")
 def export_all_csv(
+    request: Request,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
@@ -106,6 +108,17 @@ def export_all_csv(
 
     filename = f"docintel_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
 
+    try:
+        log_action(
+            db=db,
+            action="document.export_csv",
+            user_id=str(current_user.id),
+            extra_data={"scope": "all"},
+            ip_address=request.client.host if request.client else None,
+        )
+    except Exception as e:
+        print(f"[AUDIT LOG ERROR]: {e}")
+
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
@@ -115,6 +128,7 @@ def export_all_csv(
 
 @router.get("/excel")
 def export_all_excel(
+    request: Request,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
@@ -155,6 +169,17 @@ def export_all_excel(
 
     filename = f"docintel_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
+    try:
+        log_action(
+            db=db,
+            action="document.export_excel",
+            user_id=str(current_user.id),
+            extra_data={"scope": "all"},
+            ip_address=request.client.host if request.client else None,
+        )
+    except Exception as e:
+        print(f"[AUDIT LOG ERROR]: {e}")
+
     return StreamingResponse(
         output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -165,6 +190,7 @@ def export_all_excel(
 @router.get("/csv/{doc_id}")
 def export_single_csv(
     doc_id: str,
+    request: Request,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
@@ -180,6 +206,18 @@ def export_single_csv(
 
     filename = f"{doc.original_filename.rsplit('.', 1)[0]}_export.csv"
 
+    try:
+        log_action(
+            db=db,
+            action="document.export_csv",
+            user_id=str(current_user.id),
+            resource_id=str(doc.id),
+            extra_data={"scope": "single", "document_id": str(doc.id)},
+            ip_address=request.client.host if request.client else None,
+        )
+    except Exception as e:
+        print(f"[AUDIT LOG ERROR]: {e}")
+
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
@@ -190,6 +228,7 @@ def export_single_csv(
 @router.get("/excel/{doc_id}")
 def export_single_excel(
     doc_id: str,
+    request: Request,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
@@ -217,6 +256,18 @@ def export_single_excel(
     output.seek(0)
 
     filename = f"{doc.original_filename.rsplit('.', 1)[0]}_export.xlsx"
+
+    try:
+        log_action(
+            db=db,
+            action="document.export_excel",
+            user_id=str(current_user.id),
+            resource_id=str(doc.id),
+            extra_data={"scope": "single", "document_id": str(doc.id)},
+            ip_address=request.client.host if request.client else None,
+        )
+    except Exception as e:
+        print(f"[AUDIT LOG ERROR]: {e}")
 
     return StreamingResponse(
         output,

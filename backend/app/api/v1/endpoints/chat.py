@@ -8,6 +8,7 @@ from app.api.deps import get_current_active_user
 from app.models.user import User
 from app.services.rag_service import chat_with_document, chat_with_all_documents
 from app.core.limiter import limiter
+from app.services.audit_service import log_action
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
@@ -59,6 +60,19 @@ def chat(
             current_user=current_user,
             db=db,
         )
+
+        try:
+            log_action(
+                db=db,
+                action="chat.query",
+                user_id=str(current_user.id),
+                resource_id=payload.doc_id,
+                extra_data={"question": payload.question, "doc_id": payload.doc_id},
+                ip_address=request.client.host if request.client else None,
+            )
+        except Exception as e:
+            print(f"[AUDIT LOG ERROR]: {e}")
+
         return ChatResponse(question=payload.question, answer=answer)
     else:
         # Multi-document search + answer
@@ -67,6 +81,18 @@ def chat(
             current_user=current_user,
             db=db,
         )
+
+        try:
+            log_action(
+                db=db,
+                action="chat.query",
+                user_id=str(current_user.id),
+                extra_data={"question": payload.question, "doc_id": "all"},
+                ip_address=request.client.host if request.client else None,
+            )
+        except Exception as e:
+            print(f"[AUDIT LOG ERROR]: {e}")
+
         return ChatResponse(
             question=payload.question,
             answer=result["answer"],
