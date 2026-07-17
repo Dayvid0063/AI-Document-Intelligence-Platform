@@ -8,6 +8,7 @@ from app.core.database import Base
 from app.models.user import User       # noqa: F401
 from app.models.document import Document  # noqa: F401
 from app.models.audit_log import AuditLog  # noqa: F401
+from app.models.usage_log import UsageLog  # noqa: F401
 
 config = context.config
 

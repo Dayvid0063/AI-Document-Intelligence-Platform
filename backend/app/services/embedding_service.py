@@ -14,19 +14,18 @@ EMBEDDING_DIMENSIONS = 1536
 MAX_CHARS = 8000
 
 
-def generate_embedding(text: str) -> list[float] | None:
+def generate_embedding(text: str) -> tuple[list[float] | None, int]:
     """
     Convert text into a 1536-dimensional vector using OpenAI's
     text-embedding-3-small model.
 
-    Returns a list of 1536 floats representing the semantic
-    meaning of the text, or None if embedding fails.
+    Returns (embedding, input_tokens). embedding is None if embedding fails.
 
     Cost: ~$0.02 per 1M tokens — embedding a typical document
     costs less than $0.00001.
     """
     if not text or len(text.strip()) < 10:
-        return None
+        return None, 0
 
     text_to_embed = text[:MAX_CHARS].strip()
 
@@ -35,8 +34,9 @@ def generate_embedding(text: str) -> list[float] | None:
             model=EMBEDDING_MODEL,
             input=text_to_embed,
         )
-        return response.data[0].embedding
+        input_tokens = response.usage.prompt_tokens if response.usage else 0
+        return response.data[0].embedding, input_tokens
 
     except Exception as e:
         print(f"[EMBEDDING ERROR]: {type(e).__name__}: {e}")
-        return None
+        return None, 0

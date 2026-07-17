@@ -28,7 +28,7 @@ def semantic_search(
     current_user: User,
     db: Session,
     limit: int = 5,
-) -> list[Document]:
+) -> tuple[list[Document], int]:
     """
     Search the user's documents by semantic meaning.
 
@@ -40,12 +40,14 @@ def semantic_search(
 
     This finds relevant documents even if they don't contain
     the exact search words.
+
+    Returns (documents, embed_input_tokens)
     """
-    query_embedding = generate_embedding(query)
+    query_embedding, embed_input_tokens = generate_embedding(query)
 
     if query_embedding is None:
         # Fall back to simple text search if embedding fails
-        return (
+        results = (
             db.query(Document)
             .filter(
                 Document.user_id == current_user.id,
@@ -54,6 +56,7 @@ def semantic_search(
             .limit(limit)
             .all()
         )
+        return results, embed_input_tokens
 
     # cosine distance search — finds semantically similar documents
     # <=> is pgvector's cosine distance operator (lower = more similar)
@@ -68,7 +71,7 @@ def semantic_search(
         .all()
     )
 
-    return results
+    return results, embed_input_tokens
 
 
 def chat_with_document(
@@ -76,7 +79,7 @@ def chat_with_document(
     doc_id: str,
     current_user: User,
     db: Session,
-) -> str:
+) -> tuple[str, int, int]:
     """
     Answer a question about a specific document using RAG.
 
@@ -85,6 +88,8 @@ def chat_with_document(
     2. Build context from extracted text + AI summary + extracted fields
     3. Send context + question to DeepSeek
     4. Return the answer
+
+    Returns (answer, input_tokens, output_tokens)
     """
     document = (
         db.query(Document)
@@ -93,10 +98,10 @@ def chat_with_document(
     )
 
     if not document:
-        return "Document not found."
+        return "Document not found.", 0, 0
 
     if not document.extracted_text:
-        return "This document has not been processed yet. Please run OCR first."
+        return "This document has not been processed yet. Please run OCR first.", 0, 0
 
     # Build rich context from everything we know about the document
     context_parts = []
@@ -130,11 +135,13 @@ def chat_with_document(
             max_tokens=800,
             temperature=0.2,
         )
-        return response.choices[0].message.content.strip()
+        input_tokens = response.usage.prompt_tokens if response.usage else 0
+        output_tokens = response.usage.completion_tokens if response.usage else 0
+        return response.choices[0].message.content.strip(), input_tokens, output_tokens
 
     except Exception as e:
         print(f"[RAG ERROR]: {e}")
-        return "I encountered an error while processing your question. Please try again."
+        return "I encountered an error while processing your question. Please try again.", 0, 0
 
 
 def chat_with_all_documents(
@@ -150,14 +157,21 @@ def chat_with_all_documents(
     2. Build combined context from top matches
     3. Ask DeepSeek to answer based on that context
     4. Return answer + source documents
+
+    Return dict includes token counts so the caller can log usage:
+    - embed_input_tokens: tokens used for the search.embed step
+    - chat_input_tokens / chat_output_tokens: tokens used for the chat.query step
     """
     # Find the most relevant documents
-    relevant_docs = semantic_search(question, current_user, db, limit=3)
+    relevant_docs, embed_input_tokens = semantic_search(question, current_user, db, limit=3)
 
     if not relevant_docs:
         return {
             "answer": "You have no processed documents to search through yet.",
             "sources": [],
+            "embed_input_tokens": embed_input_tokens,
+            "chat_input_tokens": 0,
+            "chat_output_tokens": 0,
         }
 
     # Build combined context from top results
@@ -184,6 +198,9 @@ def chat_with_all_documents(
         return {
             "answer": "No processed documents found to answer your question.",
             "sources": [],
+            "embed_input_tokens": embed_input_tokens,
+            "chat_input_tokens": 0,
+            "chat_output_tokens": 0,
         }
 
     combined_context = "\n\n---\n\n".join(context_parts)
@@ -205,9 +222,15 @@ def chat_with_all_documents(
             temperature=0.2,
         )
 
+        chat_input_tokens = response.usage.prompt_tokens if response.usage else 0
+        chat_output_tokens = response.usage.completion_tokens if response.usage else 0
+
         return {
             "answer": response.choices[0].message.content.strip(),
             "sources": sources,
+            "embed_input_tokens": embed_input_tokens,
+            "chat_input_tokens": chat_input_tokens,
+            "chat_output_tokens": chat_output_tokens,
         }
 
     except Exception as e:
@@ -215,4 +238,7 @@ def chat_with_all_documents(
         return {
             "answer": "I encountered an error while processing your question.",
             "sources": [],
+            "embed_input_tokens": embed_input_tokens,
+            "chat_input_tokens": 0,
+            "chat_output_tokens": 0,
         }

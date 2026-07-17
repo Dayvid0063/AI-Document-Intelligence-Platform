@@ -39,17 +39,23 @@ If a field cannot be found in the text, set its value to null.
 Always extract what you can — partial data is better than nothing."""
 
 
-def analyze_document(extracted_text: str) -> dict:
+def analyze_document(extracted_text: str) -> tuple[dict, int, int]:
     """
     Send extracted OCR text to DeepSeek for classification,
     summarization, and structured field extraction.
+
+    Returns (result_dict, input_tokens, output_tokens)
     """
     if not extracted_text or len(extracted_text.strip()) < 20:
-        return {
-            "document_type": "other",
-            "summary": "Document contained insufficient text for analysis.",
-            "extracted_fields": {},
-        }
+        return (
+            {
+                "document_type": "other",
+                "summary": "Document contained insufficient text for analysis.",
+                "extracted_fields": {},
+            },
+            0,
+            0,
+        )
 
     text_to_analyze = extracted_text[:12000]
     if len(extracted_text) > 12000:
@@ -69,6 +75,9 @@ def analyze_document(extracted_text: str) -> dict:
             temperature=0.1,
         )
 
+        input_tokens = response.usage.prompt_tokens if response.usage else 0
+        output_tokens = response.usage.completion_tokens if response.usage else 0
+
         raw = response.choices[0].message.content.strip()
 
         # Log raw response for debugging
@@ -85,23 +94,35 @@ def analyze_document(extracted_text: str) -> dict:
 
         result = json.loads(raw)
 
-        return {
-            "document_type": result.get("document_type", "other"),
-            "summary": result.get("summary", ""),
-            "extracted_fields": result.get("extracted_fields", {}),
-        }
+        return (
+            {
+                "document_type": result.get("document_type", "other"),
+                "summary": result.get("summary", ""),
+                "extracted_fields": result.get("extracted_fields", {}),
+            },
+            input_tokens,
+            output_tokens,
+        )
 
     except json.JSONDecodeError as e:
         print(f"[AI JSON ERROR]: {e} | Raw response was: {raw[:300]}")
-        return {
-            "document_type": "other",
-            "summary": "AI analysis failed to return structured data.",
-            "extracted_fields": {},
-        }
+        return (
+            {
+                "document_type": "other",
+                "summary": "AI analysis failed to return structured data.",
+                "extracted_fields": {},
+            },
+            0,
+            0,
+        )
     except Exception as e:
         print(f"[AI ERROR]: {type(e).__name__}: {e}")
-        return {
-            "document_type": "other",
-            "summary": "AI analysis encountered an error.",
-            "extracted_fields": {},
-        }
+        return (
+            {
+                "document_type": "other",
+                "summary": "AI analysis encountered an error.",
+                "extracted_fields": {},
+            },
+            0,
+            0,
+        )

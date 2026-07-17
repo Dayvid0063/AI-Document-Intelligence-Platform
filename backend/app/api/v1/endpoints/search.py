@@ -9,6 +9,7 @@ from app.schemas.document import DocumentResponse
 from app.services.rag_service import semantic_search
 from app.core.limiter import limiter
 from app.services.audit_service import log_action
+from app.services.usage_service import log_usage
 
 router = APIRouter(prefix="/search", tags=["Search"])
 
@@ -40,7 +41,7 @@ def search_documents(
     Example: searching "payment owed" will find invoices even if
     they don't contain those exact words.
     """
-    results = semantic_search(
+    results, embed_input_tokens = semantic_search(
         query=payload.query,
         current_user=current_user,
         db=db,
@@ -57,6 +58,18 @@ def search_documents(
         )
     except Exception as e:
         print(f"[AUDIT LOG ERROR]: {e}")
+
+    try:
+        log_usage(
+            db=db,
+            user_id=str(current_user.id),
+            operation="search.embed",
+            model="text-embedding-3-small",
+            input_tokens=embed_input_tokens,
+            output_tokens=0,
+        )
+    except Exception as e:
+        print(f"[USAGE LOG ERROR]: {e}")
 
     return SearchResponse(
         query=payload.query,

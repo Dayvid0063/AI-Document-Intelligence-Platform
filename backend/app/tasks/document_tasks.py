@@ -1,6 +1,7 @@
 from celery import Celery
 from app.worker import celery_app
 from app.core.database import SessionLocal
+from app.core.config import settings
 from app.models.document import Document
 from app.services.ocr_service import extract_text
 from app.services.ai_service import analyze_document
@@ -10,6 +11,7 @@ from app.services.document_service import (
     update_document_ai_results,
     update_document_embedding,
 )
+from app.services.usage_service import log_usage
 import logging
 
 logger = logging.getLogger(__name__)
@@ -60,7 +62,7 @@ def process_document_pipeline(self, doc_id: str):
 
         # Step 2: AI Analysis
         try:
-            ai_result = analyze_document(extracted_text)
+            ai_result, analyze_input_tokens, analyze_output_tokens = analyze_document(extracted_text)
             document = update_document_ai_results(
                 doc_id=str(document.id),
                 document_type=ai_result["document_type"],
@@ -68,6 +70,18 @@ def process_document_pipeline(self, doc_id: str):
                 extracted_fields=ai_result["extracted_fields"],
                 db=db,
             )
+            try:
+                log_usage(
+                    db=db,
+                    user_id=str(document.user_id),
+                    operation="document.analyze",
+                    model=settings.DEEPSEEK_MODEL,
+                    input_tokens=analyze_input_tokens,
+                    output_tokens=analyze_output_tokens,
+                    document_id=str(document.id),
+                )
+            except Exception as e:
+                logger.error(f"[USAGE LOG ERROR]: {e}")
         except Exception as e:
             logger.error(f"AI analysis failed for document {doc_id}: {str(e)}")
             document.status = "failed"
@@ -77,11 +91,23 @@ def process_document_pipeline(self, doc_id: str):
 
         # Step 3: Generate Embedding
         try:
-            embedding = generate_embedding(extracted_text)
+            embedding, embed_input_tokens = generate_embedding(extracted_text)
             if embedding:
                 document = update_document_embedding(str(document.id), embedding, db)
                 document.status = "completed"
                 logger.info(f"Document {doc_id} processing completed successfully")
+                try:
+                    log_usage(
+                        db=db,
+                        user_id=str(document.user_id),
+                        operation="document.embed",
+                        model="text-embedding-3-small",
+                        input_tokens=embed_input_tokens,
+                        output_tokens=0,
+                        document_id=str(document.id),
+                    )
+                except Exception as e:
+                    logger.error(f"[USAGE LOG ERROR]: {e}")
             else:
                 raise Exception("Embedding generation returned None")
         except Exception as e:

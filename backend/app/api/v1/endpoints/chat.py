@@ -9,6 +9,8 @@ from app.models.user import User
 from app.services.rag_service import chat_with_document, chat_with_all_documents
 from app.core.limiter import limiter
 from app.services.audit_service import log_action
+from app.services.usage_service import log_usage
+from app.core.config import settings
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
@@ -54,7 +56,7 @@ def chat(
     """
     if payload.doc_id:
         # Single document Q&A
-        answer = chat_with_document(
+        answer, input_tokens, output_tokens = chat_with_document(
             question=payload.question,
             doc_id=payload.doc_id,
             current_user=current_user,
@@ -72,6 +74,18 @@ def chat(
             )
         except Exception as e:
             print(f"[AUDIT LOG ERROR]: {e}")
+
+        try:
+            log_usage(
+                db=db,
+                user_id=str(current_user.id),
+                operation="chat.query",
+                model=settings.DEEPSEEK_MODEL,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+            )
+        except Exception as e:
+            print(f"[USAGE LOG ERROR]: {e}")
 
         return ChatResponse(question=payload.question, answer=answer)
     else:
@@ -92,6 +106,26 @@ def chat(
             )
         except Exception as e:
             print(f"[AUDIT LOG ERROR]: {e}")
+
+        try:
+            log_usage(
+                db=db,
+                user_id=str(current_user.id),
+                operation="search.embed",
+                model="text-embedding-3-small",
+                input_tokens=result["embed_input_tokens"],
+                output_tokens=0,
+            )
+            log_usage(
+                db=db,
+                user_id=str(current_user.id),
+                operation="chat.query",
+                model=settings.DEEPSEEK_MODEL,
+                input_tokens=result["chat_input_tokens"],
+                output_tokens=result["chat_output_tokens"],
+            )
+        except Exception as e:
+            print(f"[USAGE LOG ERROR]: {e}")
 
         return ChatResponse(
             question=payload.question,

@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import auth, documents, search, chat, export, audit
+from app.api.v1.endpoints import auth, documents, search, chat, export, audit, usage
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -10,3 +10,4 @@ api_router.include_router(search.router)
 api_router.include_router(chat.router)
 api_router.include_router(export.router)
 api_router.include_router(audit.router)
+api_router.include_router(usage.router)

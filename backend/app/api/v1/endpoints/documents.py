@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.config import settings
 from app.api.deps import get_current_active_user
 from app.models.user import User
 from app.schemas.document import DocumentResponse, DocumentListResponse
@@ -19,6 +20,7 @@ from app.services.ai_service import analyze_document
 from app.services.embedding_service import generate_embedding
 from app.core.limiter import limiter
 from app.services.audit_service import log_action
+from app.services.usage_service import log_usage
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -133,7 +135,7 @@ def analyze_document_endpoint(
             detail="Document has no extracted text. Run OCR first.",
         )
 
-    result = analyze_document(document.extracted_text)
+    result, input_tokens, output_tokens = analyze_document(document.extracted_text)
     doc = update_document_ai_results(
         doc_id=doc_id,
         document_type=result["document_type"],
@@ -154,6 +156,19 @@ def analyze_document_endpoint(
     except Exception as e:
         print(f"[AUDIT LOG ERROR]: {e}")
 
+    try:
+        log_usage(
+            db=db,
+            user_id=str(current_user.id),
+            operation="document.analyze",
+            model=settings.DEEPSEEK_MODEL,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            document_id=str(doc.id),
+        )
+    except Exception as e:
+        print(f"[USAGE LOG ERROR]: {e}")
+
     return DocumentResponse.from_orm_with_embedding(doc)
 
 
@@ -173,7 +188,7 @@ def embed_document(
             detail="Document has no extracted text. Run OCR first.",
         )
 
-    embedding = generate_embedding(document.extracted_text)
+    embedding, input_tokens = generate_embedding(document.extracted_text)
 
     if embedding is None:
         raise HTTPException(
@@ -194,6 +209,19 @@ def embed_document(
         )
     except Exception as e:
         print(f"[AUDIT LOG ERROR]: {e}")
+
+    try:
+        log_usage(
+            db=db,
+            user_id=str(current_user.id),
+            operation="document.embed",
+            model="text-embedding-3-small",
+            input_tokens=input_tokens,
+            output_tokens=0,
+            document_id=str(doc.id),
+        )
+    except Exception as e:
+        print(f"[USAGE LOG ERROR]: {e}")
 
     return DocumentResponse.from_orm_with_embedding(doc)
 
