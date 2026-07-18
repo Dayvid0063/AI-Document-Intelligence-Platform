@@ -1,6 +1,6 @@
 # Frontend — AI Document Intelligence Platform
 
-Next.js 16 frontend for the document intelligence platform. Clean, minimal dashboard UI built with TypeScript, Tailwind CSS, and shadcn/ui.
+Next.js 16 frontend for the document intelligence platform. Dark-themed dashboard UI built with TypeScript, Tailwind CSS v4, shadcn/ui (Nova/Radix preset) and Zustand for global state management.
 
 ---
 
@@ -34,15 +34,13 @@ Create a `.env.local` file in the `frontend/` directory:
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-This points the frontend at your local FastAPI backend. In production, replace with your deployed backend URL.
-
 ### 4. Start the development server
 
 ```bash
 npm run dev
 ```
 
-The app is available at `http://localhost:3000`
+App available at `http://localhost:3000`
 
 ---
 
@@ -56,16 +54,16 @@ The app is available at `http://localhost:3000`
 
 ## Pages & routes
 
-| Route | Description | Auth required |
-|-------|-------------|---------------|
-| `/` | Root redirect — sends to `/dashboard` or `/login` | No |
+| Route | Description | Auth |
+|-------|-------------|------|
+| `/` | Landing page with hero, features, how it works, pricing | No |
 | `/login` | Sign in with email and password | No |
 | `/register` | Create a new account | No |
-| `/dashboard` | Overview with stats, recent documents, upload | Yes |
+| `/dashboard` | Overview — stats, recent documents, upload | Yes |
 | `/documents` | Full document list with all management actions | Yes |
 | `/search` | Semantic search across embedded documents | Yes |
 | `/chat` | RAG chat — ask questions about your documents | Yes |
-| `/settings` | Profile info, bulk export, API access (coming soon) | Yes |
+| `/settings` | Profile, usage stats, activity log, export | Yes |
 
 ---
 
@@ -78,75 +76,130 @@ frontend/
 │   │   ├── login/page.tsx
 │   │   └── register/page.tsx
 │   ├── (dashboard)/
+│   │   ├── layout.tsx           # Auth guard + store initialization
 │   │   ├── dashboard/page.tsx
 │   │   ├── documents/page.tsx
 │   │   ├── search/page.tsx
 │   │   ├── chat/page.tsx
 │   │   └── settings/page.tsx
-│   ├── layout.tsx
-│   └── page.tsx              # Root redirect
+│   ├── globals.css              # Design tokens (CSS variables)
+│   ├── layout.tsx               # Root layout
+│   └── page.tsx                 # Landing page
 ├── components/
 │   ├── auth/
-│   │   ├── LoginForm.tsx
+│   │   ├── LoginForm.tsx        # Split layout auth form
 │   │   └── RegisterForm.tsx
 │   ├── documents/
-│   │   ├── DocumentUpload.tsx   # Drag-and-drop with auto-pipeline progress
-│   │   ├── DocumentList.tsx     # Table with status badges and actions menu
-│   │   ├── DocumentPreview.tsx  # Modal: AI summary, fields, raw text, export
-│   │   └── StatusBadge.tsx      # Colored status pill (pending/completed/failed)
+│   │   ├── DocumentUpload.tsx   # Drag-and-drop with pipeline progress
+│   │   ├── DocumentList.tsx     # Table (desktop) + cards (mobile)
+│   │   ├── DocumentPreview.tsx  # Modal: summary, fields, raw text, export
+│   │   └── StatusBadge.tsx      # Colored status pill
 │   ├── dashboard/
-│   │   └── StatCards.tsx        # Total / Processed / Pending / Failed counts
-│   └── layout/
-│       ├── Sidebar.tsx          # Fixed left nav with active state
-│       ├── Topbar.tsx           # Page title + user dropdown
-│       └── DashboardLayout.tsx  # Auth guard + layout shell
+│   │   └── StatCards.tsx        # Total/Processed/Pending/Failed counts
+│   ├── landing/
+│   │   ├── Navbar.tsx           # Sticky nav with mobile menu
+│   │   ├── Hero.tsx             # Hero with dashboard mockup
+│   │   ├── Features.tsx         # 8-feature grid
+│   │   ├── HowItWorks.tsx       # 4-step pipeline explanation
+│   │   ├── Pricing.tsx          # 3-tier pricing (paid plans coming soon)
+│   │   └── Footer.tsx
+│   ├── layout/
+│   │   ├── Sidebar.tsx          # Fixed left nav with active glow state
+│   │   ├── Topbar.tsx           # Page title + mobile hamburger menu
+│   │   └── DashboardLayout.tsx  # Layout shell with polling + toasts
+│   └── ui/
+│       └── Toast.tsx            # Toast notification component
 ├── lib/
-│   ├── api.ts          # Axios instance with JWT interceptor + 401 redirect
-│   ├── auth.ts         # Auth service (register, login, getMe, logout)
-│   ├── documents.ts    # Document service (upload, list, process, analyze, embed, export)
-│   ├── chat.ts         # Chat service (search, chatWithDocument, chatWithAll)
+│   ├── api.ts                   # Axios instance with JWT interceptor
+│   ├── auth.ts                  # Raw auth API calls
+│   ├── documents.ts             # Document API calls + usage/audit methods
+│   ├── chat.ts                  # Search and chat API calls
+│   ├── stores/
+│   │   ├── useAuthStore.ts      # User profile, tokens, login/register/logout
+│   │   ├── useDocumentStore.ts  # Documents list, CRUD operations
+│   │   └── useToastStore.ts     # Toast notification queue
 │   └── hooks/
-│       └── useAuth.ts  # Shared hook for protected pages — fetches current user
+│       └── useDocumentPolling.ts # Smart 5s polling for pending documents
 └── types/
-    ├── auth.ts          # User, AuthTokens, LoginPayload, RegisterPayload
-    ├── document.ts      # Document, DocumentStatus, DocumentListResponse
-    └── chat.ts          # ChatMessage, ChatResponse, SearchResponse
+    ├── auth.ts                  # User, AuthTokens, login/register payloads
+    ├── document.ts              # Document, DocumentStatus, DocumentListResponse
+    ├── chat.ts                  # ChatMessage, ChatResponse, SearchResponse
+    └── usage.ts                 # UsageSummary, UsageLog, AuditLog
 ```
+
+---
+
+## Design system
+
+All colors are defined as CSS variables in `app/globals.css`. Change any token once to update the entire application:
+
+| Token | Value | Usage |
+|-------|-------|-------|
+| `--background` | `#0A0A0F` | Page background |
+| `--surface` | `#111118` | Cards, panels |
+| `--surface-elevated` | `#1A1A2E` | Modals, dropdowns |
+| `--primary` | `#6366F1` | Indigo — main accent |
+| `--cyan` | `#06B6D4` | Cyan — highlights |
+| `--foreground` | `#FFFFFF` | Headings |
+| `--foreground-muted` | `#94A3B8` | Body text |
+| `--success` | `#10B981` | Completed states |
+| `--warning` | `#F59E0B` | Pending states |
+| `--destructive` | `#EF4444` | Errors, delete |
+
+---
+
+## State management
+
+Three Zustand stores manage global state:
+
+**`useAuthStore`** — persisted to localStorage via `zustand/persist`
+- `user` — current user profile
+- `access_token`, `refresh_token` — JWT tokens
+- `isAuthenticated` — auth state
+- `login()`, `register()`, `logout()`, `fetchProfile()` — actions
+
+**`useDocumentStore`** — in-memory, reset on logout
+- `documents` — full document list
+- `initialized` — prevents duplicate fetches on navigation
+- `addDocument()`, `updateDocument()`, `removeDocument()` — optimistic updates
+
+**`useToastStore`** — in-memory notification queue
+- `toasts` — active toast list
+- `addToast()`, `removeToast()` — actions
+
+---
+
+## Smart polling
+
+`useDocumentPolling` hook (wired into `DashboardLayout` — runs on all dashboard pages):
+
+- Checks if any documents have `status === "pending"` or `status === "processing"`
+- If yes: polls `GET /documents/` every **5 seconds**
+- On each poll: compares statuses — if any document moved to `completed`, calls `updateDocument()` and fires a toast notification
+- Stops automatically when no in-flight documents remain
+- Clears interval on unmount to prevent memory leaks
 
 ---
 
 ## Key design decisions
 
-**Route groups** — `(auth)` and `(dashboard)` are Next.js route groups. The parentheses mean they don't appear in the URL — they're just for organizing layouts and applying different shells (auth pages have no sidebar; dashboard pages do).
+**Route group layout** — `app/(dashboard)/layout.tsx` runs once when the user enters the dashboard. It waits for Zustand rehydration (one event loop tick via `setTimeout`), checks auth, fetches profile and documents once. All pages read from the store — no duplicate API calls on navigation.
 
-**API client** — `lib/api.ts` is a single Axios instance shared across all services. It automatically attaches the JWT from `localStorage` to every request and redirects to `/login` on a 401 response.
+**`isAuthenticated` hydration** — Zustand `persist` rehydrates from localStorage asynchronously. The dashboard layout defers auth checks with `setTimeout(() => setHydrated(true), 0)` to avoid false redirects to login on first render.
 
-**Auth guard** — `DashboardLayout` uses the `useAuth` hook to check authentication and fetch the current user on every protected page. Unauthenticated users are redirected to `/login` before anything renders.
+**API client** — `lib/api.ts` reads the JWT token directly from the Zustand persisted state in localStorage (`docintel-auth` key) on every request. On 401 response, clears localStorage and redirects to login.
 
-**Service layer** — API calls live in `lib/auth.ts`, `lib/documents.ts`, and `lib/chat.ts`. Components never call Axios directly — they call service methods. This keeps UI components clean and makes the API layer easy to swap or test.
-
-**`is_embedded` flag** — the backend never sends the raw 1536-dimensional embedding vector to the frontend (too large). Instead it sends a boolean `is_embedded` field. The chat page uses this to filter the document selector to only show documents ready for semantic search.
-
----
-
-## Document pipeline (frontend perspective)
-
-When a user drops a file on the upload zone:
-
-1. File is sent to `POST /api/v1/documents/upload`
-2. The backend runs the full pipeline synchronously: OCR → AI analysis → embedding
-3. The upload component shows "Running OCR, AI analysis & embedding..." while waiting
-4. On completion, the fully processed document is returned and added to the list
-5. The document immediately shows its `document_type`, `is_embedded` badge, and is available in Search and Chat
+**`is_embedded` flag** — the backend never sends the raw 1536-dimensional embedding vector to the frontend. Instead it sends a boolean `is_embedded` so the chat page can filter the document selector without receiving megabytes of vector data.
 
 ---
 
 ## UI component library
 
-This project uses [shadcn/ui](https://ui.shadcn.com) with the **Nova** preset and **Radix** as the component library. Components are installed individually via:
+Uses [shadcn/ui](https://ui.shadcn.com) with the **Nova** preset and **Radix** component library.
 
+Installed components: `button`, `badge`, `card`, `avatar`, `dropdown-menu`, `separator`
+
+Install additional components:
 ```bash
 npx shadcn@latest add <component-name>
 ```
-
-Currently installed: `button`, `badge`, `card`, `avatar`, `dropdown-menu`, `separator`
