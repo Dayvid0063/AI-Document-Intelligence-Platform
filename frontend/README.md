@@ -1,6 +1,6 @@
 # Frontend — AI Document Intelligence Platform
 
-Next.js 16 frontend for the document intelligence platform. Dark-themed dashboard UI built with TypeScript, Tailwind CSS v4, shadcn/ui (Nova/Radix preset) and Zustand for global state management.
+Next.js frontend for the document intelligence platform. Dark/light themed dashboard UI built with TypeScript, Tailwind CSS v4, shadcn/ui (Nova/Radix preset) and Zustand for global state management.
 
 ---
 
@@ -82,8 +82,8 @@ frontend/
 │   │   ├── search/page.tsx
 │   │   ├── chat/page.tsx
 │   │   └── settings/page.tsx
-│   ├── globals.css              # Design tokens (CSS variables)
-│   ├── layout.tsx               # Root layout
+│   ├── globals.css              # Design tokens (CSS variables, light + dark themes)
+│   ├── layout.tsx               # Root layout with FOUC prevention script
 │   └── page.tsx                 # Landing page
 ├── components/
 │   ├── auth/
@@ -97,7 +97,7 @@ frontend/
 │   ├── dashboard/
 │   │   └── StatCards.tsx        # Total/Processed/Pending/Failed counts
 │   ├── landing/
-│   │   ├── Navbar.tsx           # Sticky nav with mobile menu
+│   │   ├── Navbar.tsx           # Sticky nav with mobile menu + theme toggle
 │   │   ├── Hero.tsx             # Hero with dashboard mockup
 │   │   ├── Features.tsx         # 8-feature grid
 │   │   ├── HowItWorks.tsx       # 4-step pipeline explanation
@@ -105,10 +105,11 @@ frontend/
 │   │   └── Footer.tsx
 │   ├── layout/
 │   │   ├── Sidebar.tsx          # Fixed left nav with active glow state
-│   │   ├── Topbar.tsx           # Page title + mobile hamburger menu
+│   │   ├── Topbar.tsx           # Page title + mobile hamburger + theme toggle
 │   │   └── DashboardLayout.tsx  # Layout shell with polling + toasts
 │   └── ui/
-│       └── Toast.tsx            # Toast notification component
+│       ├── Toast.tsx            # Toast notification component
+│       └── ThemeToggle.tsx      # Sun/moon icon button
 ├── lib/
 │   ├── api.ts                   # Axios instance with JWT interceptor
 │   ├── auth.ts                  # Raw auth API calls
@@ -117,7 +118,8 @@ frontend/
 │   ├── stores/
 │   │   ├── useAuthStore.ts      # User profile, tokens, login/register/logout
 │   │   ├── useDocumentStore.ts  # Documents list, CRUD operations
-│   │   └── useToastStore.ts     # Toast notification queue
+│   │   ├── useToastStore.ts     # Toast notification queue
+│   │   └── useThemeStore.ts     # Light/dark theme preference
 │   └── hooks/
 │       └── useDocumentPolling.ts # Smart 5s polling for pending documents
 └── types/
@@ -131,41 +133,60 @@ frontend/
 
 ## Design system
 
-All colors are defined as CSS variables in `app/globals.css`. Change any token once to update the entire application:
+All colors are defined as CSS variables in `app/globals.css`. The app supports **light and dark themes** — switching one token updates the entire application.
 
-| Token | Value | Usage |
-|-------|-------|-------|
-| `--background` | `#0A0A0F` | Page background |
-| `--surface` | `#111118` | Cards, panels |
-| `--surface-elevated` | `#1A1A2E` | Modals, dropdowns |
-| `--primary` | `#6366F1` | Indigo — main accent |
-| `--cyan` | `#06B6D4` | Cyan — highlights |
-| `--foreground` | `#FFFFFF` | Headings |
-| `--foreground-muted` | `#94A3B8` | Body text |
-| `--success` | `#10B981` | Completed states |
-| `--warning` | `#F59E0B` | Pending states |
-| `--destructive` | `#EF4444` | Errors, delete |
+### Theme switching
+
+Theme is controlled by a `data-theme` attribute on the `<html>` element:
+
+```html
+<html data-theme="dark">   <!-- dark mode -->
+<html data-theme="light">  <!-- light mode -->
+```
+
+CSS variables switch automatically based on this attribute. No Tailwind `dark:` variants needed.
+
+**Behavior:**
+- First visit → matches system/OS preference (`prefers-color-scheme`)
+- Manual toggle → sun/moon icon in landing navbar and dashboard topbar
+- Preference persisted to localStorage via `useThemeStore`
+- FOUC prevention → inline script in `layout.tsx` sets `data-theme` before React hydrates
+
+### Core design tokens
+
+| Token | Dark | Light | Usage |
+|-------|------|-------|-------|
+| `--background` | `#0A0A0F` | `#F8F9FC` | Page background |
+| `--surface` | `#111118` | `#FFFFFF` | Cards, panels |
+| `--surface-elevated` | `#1A1A2E` | `#F1F3F9` | Modals, dropdowns |
+| `--primary` | `#6366F1` | `#6366F1` | Indigo — main accent |
+| `--cyan` | `#06B6D4` | `#0891B2` | Cyan — highlights |
+| `--foreground` | `#FFFFFF` | `#0F1117` | Headings |
+| `--foreground-muted` | `#94A3B8` | `#4B5468` | Body text |
+| `--success` | `#10B981` | `#059669` | Completed states |
+| `--warning` | `#F59E0B` | `#D97706` | Pending states |
+| `--destructive` | `#EF4444` | `#DC2626` | Errors, delete |
 
 ---
 
 ## State management
 
-Three Zustand stores manage global state:
+Four Zustand stores manage global state:
 
-**`useAuthStore`** — persisted to localStorage via `zustand/persist`
-- `user` — current user profile
-- `access_token`, `refresh_token` — JWT tokens
-- `isAuthenticated` — auth state
-- `login()`, `register()`, `logout()`, `fetchProfile()` — actions
+**`useAuthStore`** — persisted to localStorage (`docintel-auth`)
+- `user`, `access_token`, `refresh_token`, `isAuthenticated`
+- `login()`, `register()`, `logout()`, `fetchProfile()`
 
 **`useDocumentStore`** — in-memory, reset on logout
-- `documents` — full document list
-- `initialized` — prevents duplicate fetches on navigation
-- `addDocument()`, `updateDocument()`, `removeDocument()` — optimistic updates
+- `documents`, `total`, `initialized`
+- `fetchDocuments()`, `addDocument()`, `updateDocument()`, `removeDocument()`
 
 **`useToastStore`** — in-memory notification queue
-- `toasts` — active toast list
-- `addToast()`, `removeToast()` — actions
+- `toasts`, `addToast()`, `removeToast()`
+
+**`useThemeStore`** — persisted to localStorage (`docintel-theme`)
+- `theme` — `"dark"` or `"light"`
+- `setTheme()`, `toggleTheme()`
 
 ---
 
@@ -175,27 +196,29 @@ Three Zustand stores manage global state:
 
 - Checks if any documents have `status === "pending"` or `status === "processing"`
 - If yes: polls `GET /documents/` every **5 seconds**
-- On each poll: compares statuses — if any document moved to `completed`, calls `updateDocument()` and fires a toast notification
+- On completion: calls `updateDocument()` and fires a toast notification
 - Stops automatically when no in-flight documents remain
-- Clears interval on unmount to prevent memory leaks
+- Clears interval on unmount — no memory leaks
 
 ---
 
 ## Key design decisions
 
-**Route group layout** — `app/(dashboard)/layout.tsx` runs once when the user enters the dashboard. It waits for Zustand rehydration (one event loop tick via `setTimeout`), checks auth, fetches profile and documents once. All pages read from the store — no duplicate API calls on navigation.
+**Route group layout** — `app/(dashboard)/layout.tsx` runs once on dashboard entry. Waits for Zustand rehydration, checks auth, fetches profile and documents once. All pages read from the store — no duplicate API calls on navigation.
 
-**`isAuthenticated` hydration** — Zustand `persist` rehydrates from localStorage asynchronously. The dashboard layout defers auth checks with `setTimeout(() => setHydrated(true), 0)` to avoid false redirects to login on first render.
+**FOUC prevention** — inline `<script>` in `layout.tsx` reads `docintel-theme` from localStorage and sets `data-theme` on `<html>` before React hydrates. `suppressHydrationWarning` on the `<html>` element silences the expected React hydration mismatch warning (same approach used by `next-themes`).
 
-**API client** — `lib/api.ts` reads the JWT token directly from the Zustand persisted state in localStorage (`docintel-auth` key) on every request. On 401 response, clears localStorage and redirects to login.
+**`isAuthenticated` hydration** — Zustand `persist` rehydrates asynchronously. Dashboard layout defers auth checks with `setTimeout(() => setHydrated(true), 0)` to avoid false redirects on first render.
 
-**`is_embedded` flag** — the backend never sends the raw 1536-dimensional embedding vector to the frontend. Instead it sends a boolean `is_embedded` so the chat page can filter the document selector without receiving megabytes of vector data.
+**API client** — `lib/api.ts` reads JWT token directly from Zustand persisted state in localStorage on every request. On 401, clears localStorage and redirects to login.
+
+**`is_embedded` flag** — backend never sends the raw 1536-dim vector to the frontend. Boolean flag instead — chat page filters the document selector without receiving megabytes of vector data.
 
 ---
 
 ## UI component library
 
-Uses [shadcn/ui](https://ui.shadcn.com) with the **Nova** preset and **Radix** component library.
+Uses [shadcn/ui](https://ui.shadcn.com) with the **Nova** preset and **Radix** component library. All shadcn components use CSS variables and theme correctly in both light and dark modes automatically.
 
 Installed components: `button`, `badge`, `card`, `avatar`, `dropdown-menu`, `separator`
 
