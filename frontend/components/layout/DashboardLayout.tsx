@@ -1,10 +1,11 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import ToastContainer from "@/components/ui/Toast";
 import { useDocumentPolling } from "@/lib/hooks/useDocumentPolling";
+import { useThemeStore } from "@/lib/stores/useThemeStore";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -16,6 +17,16 @@ export default function DashboardLayout({ children, title }: DashboardLayoutProp
   // (Dashboard, Documents, Chat, Settings) so status updates — like a
   // background embed finishing — are visible no matter which page is open.
   useDocumentPolling();
+
+  // Reconcile the theme store with whatever the pre-hydration inline
+  // script already applied to the DOM (system preference or localStorage).
+  useEffect(() => {
+    const applied = document.documentElement.getAttribute("data-theme") as "dark" | "light" | null;
+    const stored = useThemeStore.getState().theme;
+    if (applied && applied !== stored) {
+      useThemeStore.getState().setTheme(applied);
+    }
+  }, []);
 
   return (
     <div className="min-h-screen" style={{ background: "var(--background)" }}>

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Menu, X, Sparkles, LayoutDashboard, FileText, Search, MessageSquare, Settings, LogOut } from "lucide-react";
 import { useAuthStore } from "@/lib/stores/useAuthStore";
 import { cn } from "@/lib/utils";
+import ThemeToggle from "@/components/ui/ThemeToggle";
 
 interface TopbarProps {
   title: string;
@@ -30,8 +31,8 @@ export default function Topbar({ title }: TopbarProps) {
   return (
     <>
       <header
-        className="h-14 border-b sticky top-0 z-10 flex items-center justify-between px-4 md:px-6 backdrop-blur-sm"
-        style={{ background: "rgba(10,10,15,0.8)", borderColor: "var(--border)" }}
+        className="h-14 border-b sticky top-0 z-10 flex items-center justify-between px-4 md:px-6 backdrop-blur-sm bg-[var(--background)]/80"
+        style={{ borderColor: "var(--border)" }}
       >
         {/* Mobile: logo + hamburger */}
         <div className="flex items-center gap-3 md:hidden">
@@ -51,13 +52,18 @@ export default function Topbar({ title }: TopbarProps) {
           {title}
         </h1>
 
-        {/* Right: user avatar */}
-        <div
-          className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold text-white cursor-pointer"
-          style={{ background: "var(--primary)" }}
-          title={user?.email}
-        >
-          {initials}
+        {/* Right: theme toggle + user avatar */}
+        <div className="flex items-center gap-2">
+          <ThemeToggle
+            className="p-1.5 rounded-md hover:bg-[var(--surface-elevated)] text-[var(--foreground-muted)] hover:text-[var(--foreground)] transition-colors"
+          />
+          <div
+            className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold text-white cursor-pointer"
+            style={{ background: "var(--primary)" }}
+            title={user?.email}
+          >
+            {initials}
+          </div>
         </div>
       </header>
 

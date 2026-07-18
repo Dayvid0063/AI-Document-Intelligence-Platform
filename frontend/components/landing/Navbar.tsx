@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Sparkles, Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useThemeStore } from "@/lib/stores/useThemeStore";
+import ThemeToggle from "@/components/ui/ThemeToggle";
 
 const navLinks = [
   { label: "Features", href: "#features" },
@@ -20,6 +22,14 @@ export default function Navbar() {
     const onScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener("scroll", onScroll);
     return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    const applied = document.documentElement.getAttribute("data-theme") as "dark" | "light" | null;
+    const stored = useThemeStore.getState().theme;
+    if (applied && applied !== stored) {
+      useThemeStore.getState().setTheme(applied);
+    }
   }, []);
 
   return (
@@ -58,6 +68,9 @@ export default function Navbar() {
 
         {/* CTA buttons */}
         <div className="hidden md:flex items-center gap-3">
+          <ThemeToggle
+            className="p-1.5 rounded-md text-[var(--foreground-muted)] hover:text-[var(--foreground)] transition-colors"
+          />
           <Link
             href="/login"
             className="text-sm text-[var(--foreground-muted)] hover:text-[var(--foreground)] transition-colors duration-200"
@@ -95,6 +108,12 @@ export default function Navbar() {
             </Link>
           ))}
           <div className="flex flex-col gap-2 pt-2 border-t border-[var(--border)]">
+            <div className="flex items-center justify-between py-1">
+              <span className="text-sm text-[var(--foreground-muted)]">Theme</span>
+              <ThemeToggle
+                className="p-1.5 rounded-md text-[var(--foreground-muted)] hover:text-[var(--foreground)] transition-colors"
+              />
+            </div>
             <Link href="/login" className="text-sm text-[var(--foreground-muted)] py-1">
               Sign in
             </Link>
