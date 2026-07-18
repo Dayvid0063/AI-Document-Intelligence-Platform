@@ -86,13 +86,34 @@ def get_document_by_id(doc_id: str, current_user: User, db: Session) -> Document
 
 
 def update_document_text(doc_id: str, extracted_text: str, db: Session) -> Document:
-    """Save extracted OCR text and mark document as completed."""
+    """
+    Save extracted OCR text.
+
+    Only sets status to "failed" when OCR produced nothing — it does NOT
+    mark the document "completed" on success, since OCR may just be one
+    step of a larger pipeline (AI analysis + embedding) still in progress.
+    Callers that only run OCR in isolation (the manual /process endpoint)
+    are responsible for setting status = "completed" themselves.
+    """
     document = db.query(Document).filter(Document.id == doc_id).first()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found.")
 
     document.extracted_text = extracted_text
-    document.status = "completed" if extracted_text else "failed"
+    if not extracted_text:
+        document.status = "failed"
+    db.commit()
+    db.refresh(document)
+    return document
+
+
+def set_document_status(doc_id: str, status: str, db: Session) -> Document:
+    """Explicitly set a document's status."""
+    document = db.query(Document).filter(Document.id == doc_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    document.status = status
     db.commit()
     db.refresh(document)
     return document

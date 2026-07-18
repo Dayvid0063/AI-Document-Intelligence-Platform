@@ -1,10 +1,45 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { useAuthStore } from "@/lib/stores/useAuthStore";
-import { useDocumentStore } from "@/lib/stores/useDocumentStore";
-import { User, Download, Key, Bell, Shield } from "lucide-react";
+import { User, Download, Key, Bell, Shield, Activity } from "lucide-react";
 import { documentService } from "@/lib/documents";
+import { UsageSummary, AuditLog } from "@/types/usage";
+
+const ACTION_LABELS: Record<string, string> = {
+  "user.register": "Account created",
+  "user.login": "Signed in",
+  "user.login_failed": "Failed login attempt",
+  "document.upload": "Document uploaded",
+  "document.process": "OCR extraction run",
+  "document.analyze": "AI analysis run",
+  "document.embed": "Embedding generated",
+  "document.delete": "Document deleted",
+  "document.export_csv": "Exported as CSV",
+  "document.export_excel": "Exported as Excel",
+  "chat.query": "Chat query",
+  "search.query": "Search performed",
+};
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function extraDataSummary(log: AuditLog): string | null {
+  if (!log.extra_data) return null;
+  if (typeof log.extra_data.filename === "string") return log.extra_data.filename;
+  if (typeof log.extra_data.query === "string") return `"${log.extra_data.query}"`;
+  if (typeof log.extra_data.question === "string") return `"${log.extra_data.question}"`;
+  if (typeof log.extra_data.email === "string") return log.extra_data.email;
+  return null;
+}
 
 function Section({ title, icon: Icon, children }: { title: string; icon: React.ElementType; children: React.ReactNode }) {
   return (
@@ -27,6 +62,21 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
+function SkeletonLine({ width = "60%" }: { width?: string }) {
+  return (
+    <div
+      className="h-3 rounded animate-shimmer"
+      style={{ width, background: "var(--surface-elevated)" }}
+    />
+  );
+}
+
+function ErrorNote({ message }: { message: string }) {
+  return (
+    <p className="text-xs" style={{ color: "var(--foreground-subtle)" }}>{message}</p>
+  );
+}
+
 function ComingSoon({ label }: { label: string }) {
   return (
     <div className="flex items-center justify-between py-1">
@@ -38,10 +88,28 @@ function ComingSoon({ label }: { label: string }) {
 
 export default function SettingsPage() {
   const { user } = useAuthStore();
-  const { documents } = useDocumentStore();
 
-  const embedded = documents.filter((d) => d.is_embedded).length;
-  const completed = documents.filter((d) => d.status === "completed").length;
+  const [usage, setUsage] = useState<UsageSummary | null>(null);
+  const [usageError, setUsageError] = useState(false);
+  const [usageLoading, setUsageLoading] = useState(true);
+
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [auditError, setAuditError] = useState(false);
+  const [auditLoading, setAuditLoading] = useState(true);
+
+  useEffect(() => {
+    documentService
+      .getUsage()
+      .then(setUsage)
+      .catch(() => setUsageError(true))
+      .finally(() => setUsageLoading(false));
+
+    documentService
+      .getAuditLogs(10)
+      .then((res) => setAuditLogs(res.logs))
+      .catch(() => setAuditError(true))
+      .finally(() => setAuditLoading(false));
+  }, []);
 
   const handleExport = async (format: "csv" | "excel") => {
     try {
@@ -66,11 +134,81 @@ export default function SettingsPage() {
 
         {/* Usage */}
         <Section title="Usage" icon={Shield}>
-          <Field label="Total documents" value={String(documents.length)} />
-          <div className="h-px" style={{ background: "var(--border)" }} />
-          <Field label="Processed" value={String(completed)} />
-          <div className="h-px" style={{ background: "var(--border)" }} />
-          <Field label="Embedded (searchable)" value={String(embedded)} />
+          {usageLoading ? (
+            <div className="space-y-3">
+              <SkeletonLine width="40%" />
+              <SkeletonLine width="55%" />
+              <SkeletonLine width="35%" />
+            </div>
+          ) : usageError || !usage ? (
+            <ErrorNote message="Unable to load usage data." />
+          ) : (
+            <>
+              <Field label="Total AI calls" value={String(usage.total_calls)} />
+              <div className="h-px" style={{ background: "var(--border)" }} />
+              <Field
+                label="Total tokens used"
+                value={(usage.total_input_tokens + usage.total_output_tokens).toLocaleString()}
+              />
+              <div className="h-px" style={{ background: "var(--border)" }} />
+              <Field label="Estimated cost" value={`$${usage.total_cost_usd.toFixed(4)}`} />
+
+              {Object.keys(usage.breakdown).length > 0 && (
+                <>
+                  <div className="h-px" style={{ background: "var(--border)" }} />
+                  <div className="space-y-1.5 pt-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--foreground-subtle)" }}>
+                      By operation
+                    </p>
+                    {Object.entries(usage.breakdown).map(([operation, stats]) => (
+                      <div key={operation} className="flex items-center justify-between py-0.5">
+                        <span className="text-xs" style={{ color: "var(--foreground-muted)" }}>
+                          {ACTION_LABELS[operation] || operation} <span style={{ color: "var(--foreground-subtle)" }}>({stats.calls})</span>
+                        </span>
+                        <span className="text-xs font-medium" style={{ color: "var(--foreground)" }}>
+                          ${stats.cost_usd.toFixed(4)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </Section>
+
+        {/* Recent activity */}
+        <Section title="Recent activity" icon={Activity}>
+          {auditLoading ? (
+            <div className="space-y-3">
+              <SkeletonLine width="70%" />
+              <SkeletonLine width="50%" />
+              <SkeletonLine width="65%" />
+            </div>
+          ) : auditError ? (
+            <ErrorNote message="Unable to load activity." />
+          ) : auditLogs.length === 0 ? (
+            <p className="text-xs" style={{ color: "var(--foreground-muted)" }}>No recent activity yet.</p>
+          ) : (
+            <div className="space-y-2.5">
+              {auditLogs.map((log) => {
+                const summary = extraDataSummary(log);
+                return (
+                  <div key={log.id} className="flex items-center justify-between gap-2 py-0.5">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium truncate" style={{ color: "var(--foreground)" }}>
+                        {ACTION_LABELS[log.action] || log.action}
+                        {summary && <span style={{ color: "var(--foreground-muted)" }}> — {summary}</span>}
+                      </p>
+                    </div>
+                    <span className="text-xs shrink-0" style={{ color: "var(--foreground-subtle)" }}>
+                      {timeAgo(log.created_at)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </Section>
 
         {/* Export */}

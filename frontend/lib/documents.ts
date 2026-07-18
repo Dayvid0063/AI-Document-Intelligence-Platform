@@ -1,5 +1,6 @@
 import api from "./api";
 import { Document, DocumentListResponse } from "@/types/document";
+import { UsageSummary, AuditLogResponse } from "@/types/usage";
 
 export const documentService = {
   async upload(file: File, onProgress?: (percent: number) => void): Promise<Document> {
@@ -52,6 +53,16 @@ export const documentService = {
 
   async exportAllExcel(): Promise<void> {
     await downloadExport("/api/v1/export/excel", "docintel_export.xlsx");
+  },
+
+  async getUsage(): Promise<UsageSummary> {
+    const { data } = await api.get<UsageSummary>("/api/v1/usage/");
+    return data;
+  },
+
+  async getAuditLogs(limit = 20): Promise<AuditLogResponse> {
+    const { data } = await api.get<AuditLogResponse>(`/api/v1/audit/?limit=${limit}`);
+    return data;
   },
 };
 

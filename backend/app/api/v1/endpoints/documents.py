@@ -14,6 +14,7 @@ from app.services.document_service import (
     update_document_text,
     update_document_ai_results,
     update_document_embedding,
+    set_document_status,
 )
 from app.services.ocr_service import extract_text
 from app.services.ai_service import analyze_document
@@ -103,6 +104,8 @@ def process_document(
     document = get_document_by_id(doc_id, current_user, db)
     extracted = extract_text(document.file_path, document.mime_type)
     doc = update_document_text(doc_id, extracted, db)
+    if doc.status != "failed":
+        doc = set_document_status(doc_id, "completed", db)
 
     try:
         log_action(
